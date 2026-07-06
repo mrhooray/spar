@@ -1,0 +1,10 @@
+.DS_Store
+
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+*.py[cod]
+
+/eval/sol_execbench/.upstream/

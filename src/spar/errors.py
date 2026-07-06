@@ -1,0 +1,2 @@
+class SparError(RuntimeError):
+    pass

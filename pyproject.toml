@@ -1,0 +1,20 @@
+[project]
+name = "spar"
+version = "0.1.0"
+description = "Structured Parallel Automated Research"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+]
+
+[project.scripts]
+spar-cli = "spar.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.11.31,<0.12"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]

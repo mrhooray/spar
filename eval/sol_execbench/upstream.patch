@@ -1,0 +1,63 @@
+diff --git a/docker/Dockerfile b/docker/Dockerfile
+index 1c325f7..53fdfb2 100644
+--- a/docker/Dockerfile
++++ b/docker/Dockerfile
+@@ -61,7 +61,7 @@ ENV UV_LINK_MODE=copy \
+     UV_HTTP_TIMEOUT=600
+ 
+ # Copy dependency files (changes less frequently than source code)
+-COPY --chown=${HOST_UID}:${HOST_GID} pyproject.toml uv.lock README.md ./
++COPY pyproject.toml uv.lock README.md ./
+ 
+ # Install base Python dependencies first (this is the slowest part - cache it well)
+ RUN --mount=type=cache,target=/home/${HOST_USER}/.cache/uv,uid=${HOST_UID},gid=${HOST_GID} \
+@@ -71,13 +71,12 @@ RUN --mount=type=cache,target=/home/${HOST_USER}/.cache/uv,uid=${HOST_UID},gid=$
+ ENV CPLUS_INCLUDE_PATH="${CPLUS_INCLUDE_PATH}:${UV_PROJECT_ENVIRONMENT}/lib/python3.12/site-packages/include"
+ 
+ # Copy source code (changes frequently - do this last)
+-COPY --chown=${HOST_UID}:${HOST_GID} src/ ./src/
++COPY src/ ./src/
++COPY scripts/download_solexecbench.py ./scripts/
+ 
+ # Install the project itself (creates the sol-execbench console script).
+ RUN --mount=type=cache,target=/home/${HOST_USER}/.cache/uv,uid=${HOST_UID},gid=${HOST_GID} \
+     uv sync --frozen --no-editable --all-groups && \
+-    uv pip uninstall --python "$UV_PROJECT_ENVIRONMENT" triton && \
+-    uv pip install --python "$UV_PROJECT_ENVIRONMENT" --no-deps "fbtriton==3.7.1" && \
+     uv pip install --python "$UV_PROJECT_ENVIRONMENT" --no-deps --force-reinstall \
+         "nvidia-cutlass-dsl-libs-cu13==4.4.2"
+ 
+diff --git a/scripts/download_solexecbench.py b/scripts/download_solexecbench.py
+index eff8ed3..daafd00 100644
+--- a/scripts/download_solexecbench.py
++++ b/scripts/download_solexecbench.py
+@@ -17,6 +17,7 @@ from pathlib import Path
+ from datasets import load_dataset
+ 
+ REPO_ID = "nvidia/SOL-ExecBench"
++REVISION = "63699402f003496acc3af4eb534a5304a8ac1ea9"
+ SUBSETS = ["L1", "L2", "Quant", "FlashInfer-Bench"]
+ OUTPUT_DIR = Path(__file__).resolve().parent.parent / "data" / "benchmark"
+ 
+@@ -38,7 +39,7 @@ def _build_definition(row: dict) -> dict:
+ 
+ def _process_subset(subset: str) -> None:
+     print(f"Downloading {REPO_ID} config={subset} ...")
+-    ds = load_dataset(REPO_ID, name=subset, split="train")
++    ds = load_dataset(REPO_ID, name=subset, split="train", revision=REVISION)
+ 
+     for row in ds:
+         name = row["name"]
+diff --git a/src/sol_execbench/core/bench/timing.py b/src/sol_execbench/core/bench/timing.py
+index 4abae9d..6c4bcb6 100644
+--- a/src/sol_execbench/core/bench/timing.py
++++ b/src/sol_execbench/core/bench/timing.py
+@@ -178,7 +178,7 @@ def bench_gpu_time_with_cupti(
+     ) as cupti_buffers:
+         torch.cuda.synchronize()
+         for _ in range(rep):
+-            args = prepare_iteration(synchronize=False)
++            args = prepare_iteration()
+             start_cpu = cupti.get_timestamp()
+             runner(args)
+             torch.cuda.synchronize()

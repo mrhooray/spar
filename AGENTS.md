@@ -1,0 +1,5 @@
+- Use uv for Python project dependencies, environments, and commands.
+- Use modern Python language features supported by the project's minimum version in `pyproject.toml`.
+    - Prefer built-in generic types (e.g. `list[str]`, `dict[str, int]`) over legacy aliases (e.g. `List`, `Dict`).
+    - Prefer inline type parameters (e.g. `class Box[T]:`) over `TypeVar`.
+    - Do not add `from __future__ import annotations`; the project targets Python 3.14+.
