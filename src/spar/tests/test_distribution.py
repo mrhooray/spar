@@ -1,9 +1,8 @@
 import json
-from pathlib import Path
 import subprocess
+from pathlib import Path
 
 import pytest
-
 
 ROOT = Path(__file__).parents[3]
 WORKFLOWS = ("spar-init", "spar-start")
@@ -74,6 +73,26 @@ def test_bundled_cli_runs_from_another_directory(tmp_path: Path) -> None:
     )
 
     assert "candidate-start" in result.stdout
+
+    runner = subprocess.run(
+        [
+            "uv",
+            "run",
+            "--project",
+            str(ROOT),
+            "--frozen",
+            "--no-dev",
+            "spar-run",
+            "--help",
+        ],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert "--model MODEL" in runner.stdout
+    assert "--effort EFFORT" in runner.stdout
 
 
 def test_spar_start_names_the_research_loop_commands() -> None:

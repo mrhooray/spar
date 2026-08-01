@@ -179,6 +179,12 @@ def test_candidate_lifecycle_creates_driver_worktree_and_records_artifacts() -> 
                 rationale="the baseline is zero",
             )
         candidate = started["candidate"]
+        assert set(started) == {
+            "candidate",
+            "parent_commit",
+            "timing",
+            "objective_path",
+        }
         worktree = Path(candidate["workspace_path"])
         assert worktree.exists()
         assert run(["git", "rev-parse", "HEAD"], worktree).stdout.strip() == started["parent_commit"]
@@ -186,7 +192,9 @@ def test_candidate_lifecycle_creates_driver_worktree_and_records_artifacts() -> 
         run(["git", "add", "value.txt"], worktree)
         run(["git", "commit", "-m", "candidate"], worktree)
 
-        evaluation_path = Path(started["result_paths"]["evaluation_result"])
+        with chdir(repo):
+            inspected = commands.candidate_inspect("demo", candidate["id"])
+        evaluation_path = Path(inspected["result_paths"]["evaluation_result"])
         write_json(
             evaluation_path,
             {

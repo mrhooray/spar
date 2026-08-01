@@ -17,6 +17,7 @@ STATUS_FINALIZING = "finalizing"
 STATUS_COMPLETED = "completed"
 STATUS_INTERRUPTED = "interrupted"
 STATUS_FAILED = "failed"
+STATUS_REJECTED = "rejected"
 DECISION_KEEP = "keep"
 DECISION_DISCARD = "discard"
 WORKER_STATUS = STATUS_IMPLEMENTING
@@ -112,16 +113,17 @@ class SessionState:
         rationale: str,
         max_candidates: int,
         max_parallel: int,
+        workspace_root: Path | None = None,
     ) -> dict[str, Any]:
         for name, value in (("hypothesis", hypothesis), ("instructions", instructions), ("rationale", rationale)):
             if not value.strip():
                 raise SparError(f"candidate {name} must not be empty")
         candidate_id = f"cand_{uuid.uuid4().hex[:12]}"
-        workspace_path = str(self.path / "worktrees" / candidate_id)
+        workspace_path = str((workspace_root or self.path / "worktrees") / candidate_id)
         timestamp = _now_ms()
         try:
             self._db.execute("BEGIN IMMEDIATE")
-            if self._db.execute("SELECT COUNT(*) FROM candidates").fetchone()[0] >= max_candidates:
+            if self._counted_candidate_count() >= max_candidates:
                 raise SparError(f"candidate budget exhausted: {max_candidates}")
             worker_count = self._db.execute(
                 "SELECT COUNT(*) FROM candidates WHERE status = ?", (WORKER_STATUS,)
@@ -272,6 +274,36 @@ class SessionState:
         self._db.commit()
         return self.candidate(candidate_id)
 
+    def reject_unadmitted_candidate(
+        self, candidate_id: str, reason: str
+    ) -> dict[str, Any]:
+        if not reason.strip():
+            raise SparError("candidate rejection reason must not be empty")
+        if candidate_id == ROOT_CANDIDATE_ID:
+            raise SparError("root candidate cannot be rejected")
+        timestamp = _now_ms()
+        cursor = self._db.execute(
+            """
+            UPDATE candidates
+            SET status = ?, error = ?, completed_at = ?, updated_at = ?
+            WHERE id = ? AND status = ? AND commit_sha IS NULL AND eval_score IS NULL
+            """,
+            (
+                STATUS_REJECTED,
+                reason.strip(),
+                timestamp,
+                timestamp,
+                candidate_id,
+                STATUS_IMPLEMENTING,
+            ),
+        )
+        if cursor.rowcount != 1:
+            raise SparError(
+                f"candidate is not an unadmitted implementation: {candidate_id}"
+            )
+        self._db.commit()
+        return self.candidate(candidate_id)
+
     def candidate(self, candidate_id: str) -> dict[str, Any]:
         return decode_candidate(self._candidate_row(candidate_id), self.path)
 
@@ -321,11 +353,12 @@ class SessionState:
     def status_snapshot(self, max_candidates: int) -> dict[str, Any]:
         rows = self._db.execute("SELECT * FROM candidates ORDER BY created_at, id").fetchall()
         candidates = [decode_candidate(row, self.path) for row in rows]
+        budget_used = self._counted_candidate_count()
         return {
             "candidate_budget": {
                 "maximum": max_candidates,
-                "used": len(rows),
-                "remaining": max(0, max_candidates - len(rows)),
+                "used": budget_used,
+                "remaining": max(0, max_candidates - budget_used),
             },
             "counts": {
                 row["status"]: row["count"]
@@ -369,6 +402,11 @@ class SessionState:
         if row is None:
             raise SparError(f"unknown candidate: {candidate_id}")
         return row
+
+    def _counted_candidate_count(self) -> int:
+        return self._db.execute(
+            "SELECT COUNT(*) FROM candidates WHERE status != ?", (STATUS_REJECTED,)
+        ).fetchone()[0]
 
 
 def evaluation_score(payload: dict[str, Any]) -> float:

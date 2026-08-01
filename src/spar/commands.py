@@ -151,6 +151,7 @@ def candidate_start(
     hypothesis: str,
     instructions: str,
     rationale: str,
+    workspace_root: Path | None = None,
 ) -> dict[str, Any]:
     repo, path, config = _session_context(session_name)
     with SessionState(path) as state:
@@ -161,10 +162,12 @@ def candidate_start(
             rationale=rationale,
             max_candidates=config["max_candidates"],
             max_parallel=config["max_parallel"],
+            workspace_root=workspace_root,
         )
         parent = state.candidate(parent_id)
 
     workspace = Path(candidate["workspace_path"])
+    workspace.parent.mkdir(parents=True, exist_ok=True)
     try:
         with _OperationTimer(path, candidate["id"], "worktree") as operation:
             run_git(repo, ["worktree", "add", "--detach", str(workspace), parent["commit_sha"]])
@@ -182,10 +185,6 @@ def candidate_start(
         "parent_commit": parent["commit_sha"],
         "timing": operation.record,
         "objective_path": str(path / "objective.md"),
-        "evaluation": config["evaluation"],
-        "profiling": config["profiling"],
-        "result_paths": _result_paths(artifact_dir),
-        "environment": _candidate_environment(path, candidate, parent["commit_sha"]),
     }
 
 
@@ -329,6 +328,30 @@ def candidate_fail(session_name: str, candidate_id: str, error: str, *, interrup
         artifact_dir.mkdir(parents=True, exist_ok=True)
         (artifact_dir / "error.txt").write_text(error.strip() + "\n", encoding="utf-8")
     return {"candidate": candidate, "timing": operation.record}
+
+
+def reject_unadmitted_candidate(
+    session_name: str, candidate_id: str, reason: str
+) -> dict[str, Any]:
+    _, path, _ = _session_context(session_name)
+    artifact_dir = candidate_artifact_dir(path, candidate_id)
+    with _OperationTimer(path, candidate_id, "rejection") as operation:
+        with SessionState(path) as state:
+            candidate = state.reject_unadmitted_candidate(candidate_id, reason)
+        write_json(
+            artifact_dir / "rejection.json",
+            {
+                "candidate_id": candidate_id,
+                "parent_id": candidate["parent_id"],
+                "reason": candidate["error"],
+                "rejected_at": candidate["completed_at"],
+            },
+        )
+    return {
+        "candidate": candidate,
+        "timing": operation.record,
+        "artifacts": artifact_manifest(artifact_dir),
+    }
 
 
 def _session_context(session_name: str) -> tuple[Path, Path, dict[str, Any]]:
