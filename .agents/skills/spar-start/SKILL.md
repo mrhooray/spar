@@ -1,1 +1,0 @@
-../../../skills/spar-start/SKILL.md

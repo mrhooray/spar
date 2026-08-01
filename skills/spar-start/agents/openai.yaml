@@ -1,4 +1,0 @@
-interface:
-  display_name: "SPAR Start"
-  short_description: "Start a SPAR research session"
-  default_prompt: "Use $spar-start to start a SPAR research session."
