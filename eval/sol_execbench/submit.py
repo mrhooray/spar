@@ -4,9 +4,8 @@ import statistics
 import time
 import urllib.request
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-
 
 ENDPOINT = os.environ["SPAR_EVAL_ENDPOINT"]
 PROBLEM = os.environ["SPAR_EVAL_PROBLEM"]
@@ -58,11 +57,7 @@ def summarize(result: dict, started_at: str, elapsed_seconds: float) -> dict:
     required_measurements = result["config"].get("trials", 1)
     for workload_key in sorted(statuses):
         values = latencies[workload_key]
-        mean_latency = (
-            statistics.mean(values)
-            if len(values) >= required_measurements
-            else None
-        )
+        mean_latency = statistics.mean(values) if len(values) >= required_measurements else None
         workload_timings.append(
             {
                 "axes": axes[workload_key],
@@ -74,17 +69,9 @@ def summarize(result: dict, started_at: str, elapsed_seconds: float) -> dict:
             }
         )
 
-    workload_means = [
-        item["mean_latency_ms"]
-        for item in workload_timings
-        if item["mean_latency_ms"] is not None
-    ]
+    workload_means = [item["mean_latency_ms"] for item in workload_timings if item["mean_latency_ms"] is not None]
     workload_count = result["workload_count"]
-    suite_median = (
-        statistics.median(workload_means)
-        if len(workload_means) == workload_count
-        else None
-    )
+    suite_median = statistics.median(workload_means) if len(workload_means) == workload_count else None
     return {
         "score": 1000.0 / suite_median if suite_median else 0.0,
         "correct": len(workload_means) == workload_count,
@@ -93,7 +80,7 @@ def summarize(result: dict, started_at: str, elapsed_seconds: float) -> dict:
         "workloads": workload_count,
         "required_measurements": required_measurements,
         "started_at": started_at,
-        "finished_at": datetime.now(timezone.utc).isoformat(),
+        "finished_at": datetime.now(UTC).isoformat(),
         "elapsed_seconds": elapsed_seconds,
         "workload_timings": workload_timings,
         "raw_run": result["run"],
@@ -102,7 +89,7 @@ def summarize(result: dict, started_at: str, elapsed_seconds: float) -> dict:
 
 def main() -> None:
     started = time.perf_counter()
-    started_at = datetime.now(timezone.utc).isoformat()
+    started_at = datetime.now(UTC).isoformat()
     if SOLUTION_PATH is None:
         result = submit(source=Path("solution.py").read_text())
     else:

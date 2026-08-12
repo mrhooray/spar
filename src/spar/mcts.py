@@ -1,39 +1,46 @@
 import math
-import sqlite3
+from typing import Any
+
+from .lifecycle import (
+    NONTERMINAL_CANDIDATE_STATUSES,
+    ROOT_CANDIDATE_ID,
+    CandidateStatus,
+    Decision,
+)
+from .storage.db import DB
+
+DEFAULT_EXPLORATION_CONSTANT = math.sqrt(2)
 
 
-def backpropagate(db: sqlite3.Connection, candidate_id: str, reward: float) -> None:
+def backpropagate(store: DB, candidate_id: str, reward: float) -> None:
+    by_id = {candidate["id"]: candidate for candidate in store.candidates()}
     current_id: str | None = candidate_id
     while current_id is not None:
-        row = db.execute("SELECT parent_id FROM candidates WHERE id = ?", (current_id,)).fetchone()
-        db.execute(
-            """
-            UPDATE candidates
-            SET mcts_visits = mcts_visits + 1,
-                mcts_value_sum = mcts_value_sum + ?
-            WHERE id = ?
-            """,
-            (reward, current_id),
-        )
-        current_id = row["parent_id"]
+        candidate = by_id.get(current_id)
+        if candidate is None:
+            break
+        store.increment_mcts(current_id, reward)
+        current_id = candidate["parent_id"]
 
 
-def top_parents(rows: list[sqlite3.Row]) -> list[dict[str, float | int | str]]:
-    from .state import DECISION_DISCARD, NONTERMINAL_STATUSES, ROOT_CANDIDATE_ID, STATUS_COMPLETED
-
+def top_candidates(
+    store: DB,
+    limit: int | None = None,
+    *,
+    exploration_constant: float = DEFAULT_EXPLORATION_CONSTANT,
+) -> list[dict[str, float | int | str]]:
+    candidates = store.candidates()
     expandable = {
-        row["id"]: row
-        for row in rows
-        if row["status"] == STATUS_COMPLETED
-        and row["eval_score"] is not None
-        if row["decision"] != DECISION_DISCARD
+        candidate["id"]: candidate
+        for candidate in candidates
+        if is_expandable(candidate) and candidate["eval_score"] is not None
     }
     if not expandable:
         return []
 
     mean_values = {
-        candidate_id: float(row["mcts_value_sum"]) / int(row["mcts_visits"])
-        for candidate_id, row in expandable.items()
+        candidate_id: float(candidate["mcts_value_sum"]) / int(candidate["mcts_visits"])
+        for candidate_id, candidate in expandable.items()
     }
     low, high = min(mean_values.values()), max(mean_values.values())
 
@@ -41,33 +48,31 @@ def top_parents(rows: list[sqlite3.Row]) -> list[dict[str, float | int | str]]:
         return 0.5 if high == low else (value - low) / (high - low)
 
     pending_rollouts: dict[str, int] = {}
-    all_rows = {row["id"]: row for row in rows}
-    for row in rows:
-        if row["status"] not in NONTERMINAL_STATUSES or row["parent_id"] is None:
+    all_candidates = {candidate["id"]: candidate for candidate in candidates}
+    for candidate in candidates:
+        if candidate["status"] not in NONTERMINAL_CANDIDATE_STATUSES or candidate["parent_id"] is None:
             continue
-        parent_id = row["parent_id"]
+        parent_id = candidate["parent_id"]
         while parent_id is not None:
             pending_rollouts[parent_id] = pending_rollouts.get(parent_id, 0) + 1
-            parent = all_rows.get(parent_id)
+            parent = all_candidates.get(parent_id)
             parent_id = None if parent is None else parent["parent_id"]
 
-    root_visits = int(all_rows[ROOT_CANDIDATE_ID]["mcts_visits"])
-    # WU-UCT-style pending visits affect exploration without changing the completed-score mean.
-    # The root counts each pending rollout once; summing nodes would count it once per ancestor.
+    root_visits = int(all_candidates[ROOT_CANDIDATE_ID]["mcts_visits"])
     root_pending = pending_rollouts.get(ROOT_CANDIDATE_ID, 0)
     total_visits = max(1, root_visits + root_pending)
-    parents = []
-    for candidate_id, row in expandable.items():
-        candidate_visits = int(row["mcts_visits"])
-        value_sum = float(row["mcts_value_sum"])
+    ranked = []
+    for candidate_id, candidate in expandable.items():
+        candidate_visits = int(candidate["mcts_visits"])
+        value_sum = float(candidate["mcts_value_sum"])
         pending = pending_rollouts.get(candidate_id, 0)
         mean_value = mean_values[candidate_id]
         exploitation_value = normalized(mean_value)
-        exploration_bonus = math.sqrt(2 * math.log(total_visits + 1) / (candidate_visits + pending))
-        parents.append(
+        exploration_bonus = exploration_constant * math.sqrt(math.log(total_visits + 1) / (candidate_visits + pending))
+        ranked.append(
             {
                 "candidate_id": candidate_id,
-                "score": float(row["eval_score"]),
+                "score": float(candidate["eval_score"]),
                 "visits": candidate_visits,
                 "value_sum": value_sum,
                 "mean_value": mean_value,
@@ -77,4 +82,13 @@ def top_parents(rows: list[sqlite3.Row]) -> list[dict[str, float | int | str]]:
                 "priority": exploitation_value + exploration_bonus,
             }
         )
-    return sorted(parents, key=lambda item: (-item["priority"], -item["score"], item["candidate_id"]))
+    ranked.sort(key=lambda item: (-item["priority"], -item["score"], item["candidate_id"]))
+    return ranked[:limit]
+
+
+def is_expandable(candidate: dict[str, Any]) -> bool:
+    return (
+        candidate["status"] == CandidateStatus.COMPLETED
+        and candidate["decision"] != Decision.DISCARD
+        and candidate["commit_sha"] is not None
+    )

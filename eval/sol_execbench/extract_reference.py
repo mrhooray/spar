@@ -1,8 +1,7 @@
-from pathlib import Path
 import argparse
+from pathlib import Path
 
 from datasets import load_dataset
-
 
 DATASET = "nvidia/SOL-ExecBench"
 REVISION = "63699402f003496acc3af4eb534a5304a8ac1ea9"

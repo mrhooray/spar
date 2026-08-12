@@ -2,7 +2,6 @@ import os
 import subprocess
 from pathlib import Path
 
-
 UPSTREAM_REPOSITORY = "https://github.com/NVIDIA/SOL-ExecBench.git"
 UPSTREAM_COMMIT = "a9fa0804c793d438e70850c33fe34426e66d53dd"
 
@@ -35,40 +34,28 @@ def prepare_upstream() -> None:
 
     actual_commit = run_git("rev-parse", "HEAD", capture_output=True).stdout.strip()
     if actual_commit != UPSTREAM_COMMIT:
-        raise RuntimeError(
-            f"upstream checkout is at {actual_commit}; expected {UPSTREAM_COMMIT}"
-        )
+        raise RuntimeError(f"upstream checkout is at {actual_commit}; expected {UPSTREAM_COMMIT}")
 
     staged = run_git("diff", "--cached", "--quiet", check=False)
     if staged.returncode:
         raise RuntimeError("upstream checkout contains staged changes")
 
-    status = run_git(
-        "status", "--porcelain", "--untracked-files=all", capture_output=True
-    ).stdout
-    current_patch = run_git(
-        "diff", "--no-ext-diff", "--binary", "HEAD", capture_output=True
-    ).stdout
+    status = run_git("status", "--porcelain", "--untracked-files=all", capture_output=True).stdout
+    current_patch = run_git("diff", "--no-ext-diff", "--binary", "HEAD", capture_output=True).stdout
     expected_patch = PATCH_PATH.read_text()
 
     if not status:
         run_git("apply", "--check", str(PATCH_PATH))
         run_git("apply", str(PATCH_PATH))
-        current_patch = run_git(
-            "diff", "--no-ext-diff", "--binary", "HEAD", capture_output=True
-        ).stdout
+        current_patch = run_git("diff", "--no-ext-diff", "--binary", "HEAD", capture_output=True).stdout
     elif current_patch != expected_patch:
-        raise RuntimeError(
-            "upstream checkout contains changes other than the expected patch"
-        )
+        raise RuntimeError("upstream checkout contains changes other than the expected patch")
 
     if current_patch != expected_patch:
         raise RuntimeError("applied upstream patch does not match upstream.patch")
 
 
-def run_git(
-    *args: str, capture_output: bool = False, check: bool = True
-) -> subprocess.CompletedProcess[str]:
+def run_git(*args: str, capture_output: bool = False, check: bool = True) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         ["git", "-C", str(UPSTREAM_ROOT), *args],
         capture_output=capture_output,

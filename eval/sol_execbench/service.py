@@ -66,11 +66,7 @@ def submit(payload: dict) -> dict:
     problem_dir = Path(DATA_ROOT) / problem_path
     if not problem_dir.is_dir():
         raise ValueError(f"benchmark problem does not exist: {problem}")
-    workloads = [
-        json.loads(line)
-        for line in (problem_dir / "workload.jsonl").read_text().splitlines()
-        if line.strip()
-    ]
+    workloads = [json.loads(line) for line in (problem_dir / "workload.jsonl").read_text().splitlines() if line.strip()]
     workload_count = len(workloads)
     definition_name = payload.get("definition", problem_dir.name)
     iterations = int(payload.get("iterations", 50))
@@ -107,11 +103,7 @@ def submit(payload: dict) -> dict:
                 "sources": [{"path": "solution.py", "content": payload["source"]}],
             }
         solution_path.write_text(json.dumps(solution))
-        benchmark_config = {
-            key: value
-            for key, value in config.items()
-            if key not in {"trials", "max_attempts"}
-        }
+        benchmark_config = {key: value for key, value in config.items() if key not in {"trials", "max_attempts"}}
         config_path.write_text(json.dumps(benchmark_config))
 
         valid_timings = defaultdict(int)
@@ -122,15 +114,12 @@ def submit(payload: dict) -> dict:
             pending = [
                 workload
                 for workload in workloads
-                if valid_timings[workload_key(workload)] < TRIALS
-                and workload_key(workload) not in terminal_workloads
+                if valid_timings[workload_key(workload)] < TRIALS and workload_key(workload) not in terminal_workloads
             ]
             if not pending:
                 break
 
-            workload_path.write_text(
-                "\n".join(json.dumps(workload) for workload in pending) + "\n"
-            )
+            workload_path.write_text("\n".join(json.dumps(workload) for workload in pending) + "\n")
             result = subprocess.run(
                 [
                     "sol-execbench",
@@ -149,20 +138,12 @@ def submit(payload: dict) -> dict:
                 timeout=1740,
                 check=False,
             )
-            attempt_traces = [
-                json.loads(line)
-                for line in result.stdout.splitlines()
-                if line.strip().startswith("{")
-            ]
+            attempt_traces = [json.loads(line) for line in result.stdout.splitlines() if line.strip().startswith("{")]
             for trace in attempt_traces:
                 key = workload_key(trace["workload"])
                 if has_valid_timing(trace):
                     valid_timings[key] += 1
-                elif (
-                    not trace["evaluation"]
-                    .get("log", "")
-                    .startswith(TIMING_FAILURE_PREFIX)
-                ):
+                elif not trace["evaluation"].get("log", "").startswith(TIMING_FAILURE_PREFIX):
                     terminal_workloads.add(key)
                 trace["service_attempt"] = attempt
             traces.extend(attempt_traces)
