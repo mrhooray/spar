@@ -7,6 +7,20 @@ SPAR is a command-line tool for structured, parallel automated research, combini
 - **Structured**: explicit objective, candidate hypotheses, lineage, measurements, decisions, and artifacts
 - **Parallel**: isolated candidate work proceeds concurrently
 
+## Comparison
+
+Comparison of a simple sequential agent (no subagents) with SPAR at different parallelism levels, using the same harness and model across N=8 runs on a [VLIW SIMD optimization problem](https://github.com/anthropics/original_performance_takehome). Each run used 32 candidate iterations.
+
+<p align="center">
+  <img src="asset/candidate.png" alt="Best score by candidate count" width="49%">
+  <img src="asset/wallclock.png" alt="Best score over elapsed wall-clock time" width="49%">
+</p>
+
+Early results suggest that SPAR reaches better results with fewer candidate iterations and lower variance.
+With fresh agent threads for every invocation, SPAR (p=1) took significantly longer than the simple sequential agent.
+
+Caveat: proof-of-concept results from limited resources, not a rigorous benchmark.
+
 ## Getting Started
 
 Inside the target Git repository:
