@@ -64,6 +64,7 @@ def test_init_creates_current_schema() -> None:
         assert status["max_candidates"] == 64
         assert status["candidates_used"] == 1
         assert status["session"]["status"] == "idle"
+        assert "agent_session_id" not in status["session"]
         assert status["candidates"][0]["id"] == "root"
         assert "best_candidate" not in status
         assert "active_candidates" not in status

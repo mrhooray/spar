@@ -9,7 +9,7 @@ from typing import Any, Self
 from ..error import SparError
 from ..lifecycle import CandidateStatus, SessionStatus
 
-SCHEMA_VERSION = 20
+SCHEMA_VERSION = 21
 
 
 class DB:
@@ -95,6 +95,7 @@ class DB:
 
             CREATE TABLE session (
               id INTEGER PRIMARY KEY CHECK (id = 1),
+              agent_session_id TEXT,
               status TEXT NOT NULL,
               stop_requested INTEGER NOT NULL DEFAULT 0,
               started_at INTEGER,
@@ -133,7 +134,7 @@ class DB:
         return dict(row)
 
     def update_session(self, values: dict[str, Any]) -> None:
-        allowed = {"status", "stop_requested", "started_at", "completed_at", "stop_reason"}
+        allowed = {"agent_session_id", "status", "stop_requested", "started_at", "completed_at", "stop_reason"}
         if not values or not set(values) <= allowed:
             raise SparError("invalid session update")
         assignments = ", ".join(f"{column} = ?" for column in values)

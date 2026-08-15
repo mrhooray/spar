@@ -15,6 +15,8 @@ EXCLUDED_IMPLEMENTATION_ENV = (
 
 
 class AgentAdapter(Protocol):
+    session_id: str | None
+
     def invoke(
         self,
         *,
@@ -43,7 +45,7 @@ def _write_json(path: Path, value: Any) -> None:
     path.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
-def create_agent(config: dict[str, Any]) -> AgentAdapter:
+def create_agent(config: dict[str, Any], *, session_id: str | None = None) -> AgentAdapter:
     cli = config["cli"]
     if cli not in {"claude-code", "codex", "opencode", "pi"}:
         raise SparError("agent.cli must be configured as 'codex', 'claude-code', 'opencode', or 'pi'")
@@ -60,13 +62,14 @@ def create_agent(config: dict[str, Any]) -> AgentAdapter:
         model=config["model"],
         effort=config["effort"],
         timeout_seconds=config["timeout_seconds"],
+        session_id=session_id,
     )
 
 
 class ClaudeCodeAgent:
     cli = "claude-code"
 
-    def __init__(self, *, model: str, effort: str, timeout_seconds: int) -> None:
+    def __init__(self, *, model: str, effort: str, timeout_seconds: int, session_id: str | None = None) -> None:
         if not model.strip() or not effort.strip():
             raise SparError("Claude Code model and effort must not be empty")
         if timeout_seconds < 1:
@@ -74,6 +77,7 @@ class ClaudeCodeAgent:
         self.model = model
         self.effort = effort
         self.timeout_seconds = timeout_seconds
+        self.session_id = session_id
 
     def invoke(
         self,
@@ -98,6 +102,8 @@ class ClaudeCodeAgent:
             "--permission-mode",
             "bypassPermissions" if kind == "implementation" else "plan",
         ]
+        if self.session_id is not None:
+            command.extend(["--resume", self.session_id])
         if kind == "implementation":
             command.append("--dangerously-skip-permissions")
         try:
@@ -123,6 +129,10 @@ class ClaudeCodeAgent:
             envelope = json.loads(result.stdout)
         except json.JSONDecodeError as exc:
             raise SparError(f"Claude Code {kind} returned invalid JSON") from exc
+        if isinstance(envelope, dict):
+            session_id = envelope.get("session_id")
+            if isinstance(session_id, str) and session_id.strip():
+                self.session_id = session_id
         response = envelope.get("structured_output") if isinstance(envelope, dict) else None
         if not isinstance(response, dict):
             raise SparError(f"Claude Code {kind} returned no structured output")
@@ -138,6 +148,7 @@ class CodexAgent:
         model: str,
         effort: str,
         timeout_seconds: int,
+        session_id: str | None = None,
     ) -> None:
         if not model.strip() or not effort.strip():
             raise SparError("Codex model and reasoning effort must not be empty")
@@ -146,6 +157,7 @@ class CodexAgent:
         self.model = model
         self.effort = effort
         self.timeout_seconds = timeout_seconds
+        self.session_id = session_id
 
     def invoke(
         self,
@@ -163,7 +175,6 @@ class CodexAgent:
             _write_json(schema_path, schema)
             command = self._command(
                 kind=kind,
-                cwd=cwd,
                 schema_path=schema_path,
                 response_path=response_path,
             )
@@ -171,6 +182,7 @@ class CodexAgent:
                 result = subprocess.run(
                     command,
                     input=prompt,
+                    cwd=cwd,
                     text=True,
                     capture_output=True,
                     timeout=self.timeout_seconds,
@@ -193,13 +205,17 @@ class CodexAgent:
                 detail = result.stderr.strip().splitlines()
                 suffix = f": {detail[-1]}" if detail else ""
                 raise SparError(f"Codex {kind} failed with exit code {result.returncode}{suffix}")
-            return _read_json_object(response_path, f"Codex {kind} response")
+            response = _read_json_object(response_path, f"Codex {kind} response")
+            for event in _json_events(result.stdout):
+                if event.get("type") == "thread.started" and isinstance(event.get("thread_id"), str):
+                    self.session_id = event["thread_id"]
+                    break
+            return response
 
     def _command(
         self,
         *,
         kind: str,
-        cwd: Path,
         schema_path: Path,
         response_path: Path,
     ) -> list[str]:
@@ -208,13 +224,12 @@ class CodexAgent:
             "codex",
             "--ask-for-approval",
             "never",
-            "exec",
-            "--ephemeral",
             "--sandbox",
             sandbox,
-            "--cd",
-            str(cwd),
+            "exec",
         ]
+        if self.session_id is not None:
+            command.extend(["resume", self.session_id])
         command.extend(
             [
                 "--ignore-user-config",
@@ -247,7 +262,7 @@ class CodexAgent:
 class OpenCodeAgent:
     cli = "opencode"
 
-    def __init__(self, *, model: str, effort: str, timeout_seconds: int) -> None:
+    def __init__(self, *, model: str, effort: str, timeout_seconds: int, session_id: str | None = None) -> None:
         if not model.strip() or not effort.strip():
             raise SparError("OpenCode model and reasoning effort must not be empty")
         if timeout_seconds < 1:
@@ -255,6 +270,8 @@ class OpenCodeAgent:
         self.model = model
         self.effort = effort
         self.timeout_seconds = timeout_seconds
+        self.session_id = session_id
+        self.session_cwd: Path | None = None
 
     def invoke(
         self,
@@ -282,6 +299,8 @@ class OpenCodeAgent:
             "--auto",
             request,
         ]
+        if self.session_id is not None and self.session_cwd == cwd.resolve():
+            command[2:2] = ["--session", self.session_id]
         try:
             result = subprocess.run(
                 command,
@@ -305,13 +324,20 @@ class OpenCodeAgent:
             detail = result.stderr.strip().splitlines()
             suffix = f": {detail[-1]}" if detail else ""
             raise SparError(f"OpenCode {kind} failed with exit code {result.returncode}{suffix}")
-        return _opencode_response(result.stdout, kind)
+        events = _json_events(result.stdout)
+        response = _opencode_response(events, kind)
+        for event in events:
+            if isinstance(event.get("sessionID"), str):
+                self.session_id = event["sessionID"]
+                self.session_cwd = cwd.resolve()
+                break
+        return response
 
 
 class PiAgent:
     cli = "pi"
 
-    def __init__(self, *, model: str, effort: str, timeout_seconds: int) -> None:
+    def __init__(self, *, model: str, effort: str, timeout_seconds: int, session_id: str | None = None) -> None:
         if not model.strip() or not effort.strip():
             raise SparError("Pi model and thinking level must not be empty")
         if timeout_seconds < 1:
@@ -319,6 +345,8 @@ class PiAgent:
         self.model = model
         self.effort = effort
         self.timeout_seconds = timeout_seconds
+        self.session_id = session_id
+        self.session_cwd: Path | None = None
 
     def invoke(
         self,
@@ -336,13 +364,15 @@ class PiAgent:
             "pi",
             "--mode",
             "json",
-            "--no-session",
             "--no-approve",
             "--model",
             self.model,
             "--thinking",
             self.effort,
         ]
+        if self.session_id is not None:
+            option = "--session" if self.session_cwd == cwd.resolve() else "--fork"
+            command.extend([option, self.session_id])
         if kind != "implementation":
             command.extend(["--tools", "read,grep,find,ls"])
         command.append("-p")
@@ -365,7 +395,27 @@ class PiAgent:
             _write_text(event_path, result.stdout)
         if result.returncode != 0:
             raise SparError(_command_failure("Pi", kind, result))
-        return _pi_response(result.stdout, kind)
+        events = _json_events(result.stdout)
+        response = _pi_response(events, kind)
+        for event in events:
+            if event.get("type") == "session" and isinstance(event.get("id"), str):
+                self.session_id = event["id"]
+                if isinstance(event.get("cwd"), str):
+                    self.session_cwd = Path(event["cwd"]).resolve()
+                break
+        return response
+
+
+def _json_events(output: str) -> list[dict[str, Any]]:
+    events: list[dict[str, Any]] = []
+    for line in output.splitlines():
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(event, dict):
+            events.append(event)
+    return events
 
 
 def _write_text(path: Path, text: str) -> None:
@@ -388,14 +438,10 @@ def _command_failure(cli: str, kind: str, result: subprocess.CompletedProcess[st
     return f"{cli} {kind} failed with exit code {result.returncode}{suffix}"
 
 
-def _pi_response(events: str, kind: str) -> dict[str, Any]:
+def _pi_response(events: list[dict[str, Any]], kind: str) -> dict[str, Any]:
     assistant_text: str | None = None
-    for line in events.splitlines():
-        try:
-            event = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if not isinstance(event, dict) or event.get("type") != "message_end":
+    for event in events:
+        if event.get("type") != "message_end":
             continue
         message = event.get("message")
         if not isinstance(message, dict) or message.get("role") != "assistant":
@@ -421,15 +467,9 @@ def _pi_response(events: str, kind: str) -> dict[str, Any]:
     return response
 
 
-def _opencode_response(events: str, kind: str) -> dict[str, Any]:
+def _opencode_response(events: list[dict[str, Any]], kind: str) -> dict[str, Any]:
     text_parts: list[str] = []
-    for line in events.splitlines():
-        try:
-            event = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if not isinstance(event, dict):
-            continue
+    for event in events:
         part = event.get("part")
         if isinstance(part, dict) and isinstance(part.get("text"), str):
             text_parts.append(part["text"])

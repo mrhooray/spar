@@ -92,11 +92,11 @@ def test_research_loop_reaches_candidate_limit_with_lineage_decisions_and_failur
         assert failed["status"] == "failed"
         assert "simulated implementation failure after concrete change" in failed["error"]
         with chdir(repo):
-            first_workspace = Path(candidate_ops.inspect("demo", first["id"])["candidate"]["workspace_path"])
+            first_worktree = Path(candidate_ops.inspect("demo", first["id"])["candidate"]["worktree_path"])
         assert [cwd.resolve() for cwd in agent.cwds["proposal"]] == [
             repo.resolve(),
-            first_workspace.resolve(),
-            first_workspace.resolve(),
+            first_worktree.resolve(),
+            first_worktree.resolve(),
         ]
         proposal_progress = [
             json.loads(prompt.split("Research progress:\n", 1)[1]) for prompt in agent.prompts["proposal"]
@@ -521,6 +521,7 @@ class FakeAgent:
         implementation_delays: dict[int, float] | None = None,
         implementation_barrier: Barrier | None = None,
     ) -> None:
+        self.session_id: str | None = None
         self.values = values
         self.discard_values = discard_values or set()
         self.no_change_values = no_change_values or set()

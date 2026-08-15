@@ -146,7 +146,10 @@ def _require_clean_worktree(repo: Path) -> None:
 
 
 def _session_status(db: DB) -> dict[str, Any]:
-    session = db.session()
+    stored = db.session()
+    session = {
+        key: stored[key] for key in ("id", "status", "stop_requested", "started_at", "completed_at", "stop_reason")
+    }
     session["stop_requested"] = bool(session["stop_requested"])
     started_at = session["started_at"]
     completed_at = session["completed_at"]

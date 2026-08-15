@@ -10,6 +10,7 @@ from spar.agent.adapter import (
     CodexAgent,
     OpenCodeAgent,
     PiAgent,
+    _json_events,
     _opencode_response,
     _pi_response,
     create_agent,
@@ -101,6 +102,7 @@ def test_codex_adapter_uses_explicit_model_effort_and_schema(tmp_path: Path, mon
     def fake_run(command: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
         captured["command"] = command
         captured["input"] = kwargs["input"]
+        captured["kwargs"] = kwargs
         response_path = Path(command[command.index("--output-last-message") + 1])
         response_path.write_text(
             json.dumps(
@@ -113,7 +115,12 @@ def test_codex_adapter_uses_explicit_model_effort_and_schema(tmp_path: Path, mon
             ),
             encoding="utf-8",
         )
-        return subprocess.CompletedProcess(command, 0, '{"type":"audit-event"}\n', "")
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            '{"type":"thread.started","thread_id":"thread-1"}\n{"type":"audit-event","id":"event-1"}\n',
+            "",
+        )
 
     monkeypatch.setattr("spar.agent.adapter.subprocess.run", fake_run)
     adapter = CodexAgent(model="gpt-test", effort="high", timeout_seconds=30)
@@ -144,9 +151,11 @@ def test_codex_adapter_uses_explicit_model_effort_and_schema(tmp_path: Path, mon
     assert_phase_command(command, "read-only")
     assert "--output-schema" in command
     assert "--json" in command
-    assert "--ephemeral" in command
+    assert "--ephemeral" not in command
+    assert "--cd" not in command
+    assert captured["kwargs"]["cwd"] == tmp_path
     assert captured["input"] == "bounded prompt"
-    assert (tmp_path / "propose.codex.jsonl").read_text(encoding="utf-8") == ('{"type":"audit-event"}\n')
+    assert adapter.session_id == "thread-1"
 
     adapter.invoke(
         kind="implementation",
@@ -164,7 +173,9 @@ def test_codex_adapter_uses_explicit_model_effort_and_schema(tmp_path: Path, mon
         schema=REFLECTION_SCHEMA,
         event_path=tmp_path / "reflect.codex.jsonl",
     )
-    assert_phase_command(captured["command"], "read-only")
+    command = captured["command"]
+    assert_phase_command(command, "read-only")
+    assert command[command.index("exec") : command.index("exec") + 3] == ["exec", "resume", "thread-1"]
 
 
 def test_opencode_adapter_uses_json_events_and_returns_the_requested_object(
@@ -181,6 +192,7 @@ def test_opencode_adapter_uses_json_events_and_returns_the_requested_object(
             json.dumps(
                 {
                     "type": "text",
+                    "sessionID": "session-1",
                     "part": {
                         "type": "text",
                         "text": '{"hypothesis":"test","instructions":"change one thing",'
@@ -216,6 +228,34 @@ def test_opencode_adapter_uses_json_events_and_returns_the_requested_object(
     assert json.dumps(PROPOSAL_SCHEMA, indent=2, sort_keys=True) in command[-1]
     assert captured["kwargs"]["timeout"] == 30
     assert event_path.is_file()
+    assert adapter.session_id == "session-1"
+
+    adapter.invoke(
+        kind="proposal",
+        prompt="next prompt",
+        cwd=tmp_path,
+        schema=PROPOSAL_SCHEMA,
+    )
+    assert captured["command"][:4] == ["opencode", "run", "--session", "session-1"]
+
+    other_cwd = tmp_path / "other"
+    other_cwd.mkdir()
+    adapter.invoke(
+        kind="proposal",
+        prompt="another prompt",
+        cwd=other_cwd,
+        schema=PROPOSAL_SCHEMA,
+    )
+    assert "--session" not in captured["command"]
+
+    resumed = OpenCodeAgent(model="openai/gpt-test", effort="high", timeout_seconds=30, session_id="stored")
+    resumed.invoke(
+        kind="proposal",
+        prompt="resumed prompt",
+        cwd=tmp_path,
+        schema=PROPOSAL_SCHEMA,
+    )
+    assert "--session" not in captured["command"]
 
 
 def test_opencode_response_recovers_json_after_text() -> None:
@@ -229,7 +269,7 @@ def test_opencode_response_recovers_json_after_text() -> None:
         }
     )
 
-    assert _opencode_response(events, "reflection") == {"decision": "keep"}
+    assert _opencode_response(_json_events(events), "reflection") == {"decision": "keep"}
 
 
 def test_pi_response_extracts_final_assistant_json() -> None:
@@ -250,7 +290,7 @@ def test_pi_response_extracts_final_assistant_json() -> None:
         ]
     )
 
-    assert _pi_response(events, "reflection") == {"decision": "keep"}
+    assert _pi_response(_json_events(events), "reflection") == {"decision": "keep"}
 
 
 def test_pi_agent_uses_json_mode_and_read_only_tools(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -262,20 +302,25 @@ def test_pi_agent_uses_json_mode_and_read_only_tools(tmp_path: Path, monkeypatch
         return subprocess.CompletedProcess(
             command,
             0,
-            json.dumps(
-                {
-                    "type": "message_end",
-                    "message": {
-                        "role": "assistant",
-                        "content": [
-                            {
-                                "type": "text",
-                                "text": '{"hypothesis":"test","instructions":"change",'
-                                '"rationale":"reason","profiling_question":null}',
-                            }
-                        ],
-                    },
-                }
+            "\n".join(
+                [
+                    json.dumps({"type": "session", "id": "pi-session-1", "cwd": str(kwargs["cwd"])}),
+                    json.dumps(
+                        {
+                            "type": "message_end",
+                            "message": {
+                                "role": "assistant",
+                                "content": [
+                                    {
+                                        "type": "text",
+                                        "text": '{"hypothesis":"test","instructions":"change",'
+                                        '"rationale":"reason","profiling_question":null}',
+                                    }
+                                ],
+                            },
+                        }
+                    ),
+                ]
             )
             + "\n",
             "",
@@ -294,12 +339,40 @@ def test_pi_agent_uses_json_mode_and_read_only_tools(tmp_path: Path, monkeypatch
 
     command = captured["command"]
     assert response["hypothesis"] == "test"
-    assert command[:4] == ["pi", "--mode", "json", "--no-session"]
+    assert command[:4] == ["pi", "--mode", "json", "--no-approve"]
     assert command[command.index("--model") + 1] == "anthropic/test"
     assert command[command.index("--thinking") + 1] == "high"
     assert command[command.index("--tools") + 1] == "read,grep,find,ls"
     assert captured["kwargs"]["input"].startswith("bounded prompt")
     assert captured["kwargs"]["cwd"] == tmp_path
+    assert agent.session_id == "pi-session-1"
+
+    agent.invoke(
+        kind="proposal",
+        prompt="next prompt",
+        cwd=tmp_path,
+        schema=PROPOSAL_SCHEMA,
+    )
+    assert captured["command"][captured["command"].index("--session") + 1] == "pi-session-1"
+
+    other_cwd = tmp_path / "other"
+    other_cwd.mkdir()
+    agent.invoke(
+        kind="proposal",
+        prompt="another prompt",
+        cwd=other_cwd,
+        schema=PROPOSAL_SCHEMA,
+    )
+    assert captured["command"][captured["command"].index("--fork") + 1] == "pi-session-1"
+
+    resumed = PiAgent(model="anthropic/test", effort="high", timeout_seconds=30, session_id="persisted-session")
+    resumed.invoke(
+        kind="proposal",
+        prompt="resumed prompt",
+        cwd=tmp_path,
+        schema=PROPOSAL_SCHEMA,
+    )
+    assert captured["command"][captured["command"].index("--fork") + 1] == "persisted-session"
 
 
 def test_claude_code_agent_uses_structured_output(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -314,6 +387,7 @@ def test_claude_code_agent_uses_structured_output(tmp_path: Path, monkeypatch: p
             json.dumps(
                 {
                     "result": "ignored envelope text",
+                    "session_id": "claude-session-1",
                     "structured_output": {"summary": "changed", "limitations": []},
                 }
             ),
@@ -340,6 +414,7 @@ def test_claude_code_agent_uses_structured_output(tmp_path: Path, monkeypatch: p
     assert "--dangerously-skip-permissions" in command
     assert captured["kwargs"]["input"] == "implement one change"
     assert captured["kwargs"]["cwd"] == tmp_path
+    assert agent.session_id == "claude-session-1"
 
     agent.invoke(
         kind="proposal",
@@ -348,6 +423,7 @@ def test_claude_code_agent_uses_structured_output(tmp_path: Path, monkeypatch: p
         schema=PROPOSAL_SCHEMA,
     )
     command = captured["command"]
+    assert command[command.index("--resume") + 1] == "claude-session-1"
     assert command[command.index("--permission-mode") + 1] == "plan"
     assert "--dangerously-skip-permissions" not in command
 

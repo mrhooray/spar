@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from .agent import invocation as agent_invocation
-from .agent.adapter import create_agent
+from .agent.adapter import AgentAdapter, create_agent
 from .config import load_config
 from .error import SparError
 from .lifecycle import (
@@ -68,7 +68,9 @@ class ResearchLoop:
 
     def _initialize(self) -> None:
         config = load_config(self.session_dir)
-        self.agent = create_agent(config["agent"])
+        self.agent_config = config["agent"]
+        with DB(self.session_dir) as db:
+            self.agent = create_agent(self.agent_config, session_id=db.session()["agent_session_id"])
         self.max_candidates = config["max_candidates"]
         self.max_parallel = config["max_parallel"]
         self.profiler_configured = config["profiling"]["command"] is not None
@@ -263,6 +265,7 @@ class ResearchLoop:
         }
         event_path = self.session_dir / "artifacts" / "proposals" / f"{proposal_number:04d}.events.jsonl"
         try:
+            previous_session_id = self.agent.session_id
             proposal = agent_invocation.propose(
                 self.agent,
                 objective=self.objective,
@@ -273,6 +276,8 @@ class ResearchLoop:
                 state_path=self.session_dir,
                 parent_id=parent_id,
             )
+            if self.agent.session_id != previous_session_id:
+                self._save_agent_session()
         except Exception as exc:
             self._log("proposal", proposal_id, "failed", _error_text(exc))
             raise
@@ -281,10 +286,11 @@ class ResearchLoop:
 
     def _process_candidate(self, candidate: dict[str, Any]) -> None:
         candidate_id = candidate["id"]
+        worker = create_agent(self.agent_config)
         try:
             parent = candidate_ops.inspect(self.session_name, candidate["parent_id"])["candidate"]
             parent_commit = parent["commit_sha"]
-            implementation_report = self._implement_candidate(candidate, parent_commit)
+            implementation_report = self._implement_candidate(candidate, parent_commit, worker)
             self._require_inputs_unchanged()
             evaluation = candidate_ops.evaluate(self.session_name, candidate_id)
             profiles = {
@@ -306,7 +312,7 @@ class ResearchLoop:
                 "profiling_question",
             )
             reflection = agent_invocation.reflect(
-                self.agent,
+                worker,
                 objective=self.objective,
                 intervention=intervention,
                 implementation_report=implementation_report,
@@ -347,11 +353,12 @@ class ResearchLoop:
         self,
         candidate: dict[str, Any],
         parent_commit: str,
+        worker: AgentAdapter,
     ) -> dict[str, Any]:
         workspace = Path(candidate["worktree_path"])
         artifact_dir = candidate_artifact_dir(self.session_dir, candidate["id"])
         implementation = agent_invocation.implement(
-            self.agent,
+            worker,
             objective=self.objective,
             candidate=candidate,
             cwd=workspace,
@@ -361,6 +368,13 @@ class ResearchLoop:
         )
         git.commit_candidate_workspace(workspace, candidate["id"], parent_commit)
         return implementation
+
+    def _save_agent_session(self) -> None:
+        session_id = self.agent.session_id
+        if session_id is None:
+            return
+        with DB(self.session_dir) as db, db.transaction():
+            db.update_session({"agent_session_id": session_id})
 
     def _candidates_used(self) -> int:
         with DB(self.session_dir) as db:

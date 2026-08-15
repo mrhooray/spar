@@ -151,9 +151,9 @@ def _optional_text(value: Any) -> str | None:
 def proposal_prompt(objective: str, progress: dict[str, Any], session_name: str) -> str:
     return f"""Propose the next intervention in an automated, evidence-driven software research session.
 
-The selected parent's repository state is your current working directory. Inspect its source and
-ground the intervention in specific existing code and a concrete mechanism. The intervention must
-be implementation-ready. Do not modify files.
+The selected parent—the candidate to build on—is the current worktree. Inspect its source and ground
+the intervention in specific existing code and a concrete mechanism. The intervention must be
+implementation-ready. Do not modify files.
 
 Use the research progress below to avoid repeating completed, failed, discarded, or currently active
 interventions. The selected parent is fixed; do not select another parent. Propose one coherent
