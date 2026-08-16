@@ -17,7 +17,8 @@ Comparison of a simple sequential agent (no subagents) with SPAR at different pa
 </p>
 
 Early results suggest that SPAR reaches better results with fewer candidate iterations and lower variance.
-With fresh agent threads for every invocation, SPAR (p=1) took significantly longer than the simple sequential agent.
+
+With a fresh agent session for every turn, both SPAR configurations took longer to complete all 32 candidates than the simple sequential agent, with p=1 taking the longest. This motivated SPAR's subsequent transition to persistent agent sessions; see [Learnings](LEARNINGS.md).
 
 Caveat: proof-of-concept results from limited resources, not a rigorous benchmark.
 
