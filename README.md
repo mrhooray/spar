@@ -22,6 +22,16 @@ With a fresh agent session for every turn, both SPAR configurations took longer 
 
 Caveat: proof-of-concept results from limited resources, not a rigorous benchmark.
 
+## Installation
+
+Requires [uv](https://docs.astral.sh/uv/):
+
+```sh
+uv tool install --python 3.14 git+https://github.com/mrhooray/spar.git
+```
+
+Supported harnesses: `codex`, `claude-code`, `opencode`, and `pi`.
+
 ## Getting Started
 
 Inside the target Git repository:
@@ -36,9 +46,6 @@ Initialized session SESSION_NAME.
 Edit:
   objective: /path/to/repo/.spar/SESSION_NAME/objective.md
   config:    /path/to/repo/.spar/SESSION_NAME/config.toml
-
-Then run:
-  spar start SESSION_NAME
 ```
 
 ```sh
