@@ -22,6 +22,10 @@ With a fresh agent session for every turn, both SPAR configurations took longer 
 
 Caveat: proof-of-concept results from limited resources, not a rigorous benchmark.
 
+## MCTS Visualizations
+
+Explore SPAR's search progression through these [interactive visualizations](https://vliw-simd.mrhooray.com/spar/).
+
 ## Installation
 
 Requires [uv](https://docs.astral.sh/uv/):
