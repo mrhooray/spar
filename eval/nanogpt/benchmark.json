@@ -1,0 +1,22 @@
+{
+  "repository": "https://github.com/KellerJordan/modded-nanogpt",
+  "commit": "ecbb586296d3dac36fd206211f25d63bad4a6b35",
+  "data_definitions": {
+    "_load_data_shard": "b471f75226b7b8aa3f683431a2cccc36ad70aaf05f809db483f9719580ee7b60",
+    "Shard": "696b902ab05018c343fc85041d67901cfad2116015bf95ce43d8f0c72dd3623f",
+    "distributed_data_generator": "4148272b343db452082fd1a39c9e96fa96bf593347f7ed2ded93343e0f236ae4"
+  },
+  "validation_fields": {
+    "train_files": "885eda4d09a7557b25650a4baa46832ecaa17541e00e8e0a0ce40952c3c9ab99",
+    "val_files": "0745da0d447929ca270549ef16e3852b289c8928683e27efd52beb8093945729",
+    "val_tokens": "8e154aeecc9a8620c1abe8d67ed48565e590c40d0afdc823cb9062673c863e7a",
+    "val_batch_size": "12167c3f3f18205e7d4bf596255592cfe2328a5c68fbd4ba9dd2dc488cb8b7b4",
+    "val_loss_every": "f433c14b3a299ba0b10021e66338b8c97c5658c0185d9e1c0a2bf2eac7b3f6d5",
+    "save_checkpoint": "bfdbc42f821a1db381d3e9bdb4df55b131e34807d7bcc9c647bdccb5708365a9",
+    "run_evals": "bfdbc42f821a1db381d3e9bdb4df55b131e34807d7bcc9c647bdccb5708365a9"
+  },
+  "protected_tails": {
+    "#            Warmup kernels": "ac61a33f00ac5128dea080bd323244f922411ec0d2452faf6ff049b9fb133a8f",
+    "#        Training and validation": "4eb61c851dbc836a38652a1d52a816d0dae07717eac7e02abf47d30945f6407e"
+  }
+}
