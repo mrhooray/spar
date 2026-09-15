@@ -1,0 +1,327 @@
+{
+  "implementations": {
+    "upstream": {
+      "total_steps": 1285,
+      "source_sha256": {
+        "train_gpt.py": "5afd951e0cde5e42c3e4e25a39288685f62aae13bd0d833a9a27de84f852d232",
+        "triton_kernels.py": "2d9ed28c840e872ab4a364596bc2f315eeeccffd1418ab5edd1c040513b6dc79",
+        "dc_triton_kernels.py": "3fca1f77b4b4df558c46de84972d32839ae5dff8c8fbe7e3d0ea14168f67b8da"
+      },
+      "commit": "f411b3d346aa52d3504324ca93c230fd84c6c07f",
+      "repository": "https://github.com/KellerJordan/modded-nanogpt"
+    },
+    "candidate": {
+      "total_steps": 1190,
+      "source_sha256": {
+        "train_gpt.py": "4dec77def415ec864ec1bf7371256484272bae6e86f65448858803bdd773c5e1",
+        "triton_kernels.py": "537d5931c8d13205af941afef4b993b596272cf4df68543b6ae0aa55f43850b4",
+        "dc_triton_kernels.py": "328c82a978413e460c70c90d9f59b82f4f9b1e87c194cc5bae45b1f0b98a9bb8"
+      },
+      "name": "SlimFP8",
+      "base_commit": "54d4e142d2f14b7a99204193d6b6ff22e41cbbe2",
+      "spar_base_candidate": "d3486b9a:bd4bd40b904c",
+      "extension_updates": 60,
+      "change_from_base": "num_extension_iterations: 45 -> 60"
+    }
+  },
+  "evaluation": {
+    "gpu": "H100!:8",
+    "cpu": 32,
+    "memory_mib": 131072,
+    "image_id": "im-xiYgEz08tSvAmJOq2YPFcx",
+    "harness_sha256": {
+      "modal_eval.py": "4ee979fc9ab13aa9b4ed6449c687db7ed367794433688a329a24ae1034b480d2",
+      "modal_setup.py": "859062f36ce9680f00ad89e8ebc25cb0b8b8aa364de1a06b69ddbedca1935690",
+      "torch_cache.py": "a906053b4481f6d9c59a1f2bcaba4d11d50b076e0689f549ded7e036006bfd3e",
+      "seeded_train.py": "71ce6a7d6dae0e98a882cbec1c7deaee9ccf30cb7bfcbeb7c18e4c4d4386c72a",
+      "benchmark.json": "c801c3f5d746a9226143e0c004369c34384595677ea2f9c5a2315d2e13ab7555"
+    },
+    "validation_loss_target": 3.28,
+    "timing": "Training time; excludes setup, compilation/warmup, and validation.",
+    "allocations": [
+      {
+        "id": "2a3517d7",
+        "sandbox_id": "sb-ho41Q4BiWBuvSkmZe7tjx0",
+        "gpu_uuids": [
+          "GPU-00451b36-3e27-4c17-178e-6bd92f62d568",
+          "GPU-11ed4e9d-79da-6587-845c-6236d870e5e5",
+          "GPU-1b2c967f-b596-d22d-85b0-de31080f0e65",
+          "GPU-37eb86c8-79b0-b00a-ba0d-51e7f23d6601",
+          "GPU-4d13bd51-72cd-6d83-6d36-113c190036af",
+          "GPU-7b21cee4-d2ea-d40b-125c-bf0a57d2e45e",
+          "GPU-a6e94b19-29eb-ead2-7884-3d522862d5ac",
+          "GPU-f1ac5d37-1acb-1d8d-0ee8-14aa3db922a1"
+        ],
+        "host": {
+          "MODAL_REGION": "us-east4",
+          "MODAL_CLOUD_PROVIDER": "CLOUD_PROVIDER_GCP",
+          "MODAL_CLOUD": null,
+          "MODAL_TASK_ID": "ta-01M2H264C06NQ9W14F2XTFBBSS",
+          "cpu": {
+            "vendor_id": "GenuineIntel",
+            "cpu family": "6",
+            "model": "143",
+            "model name": "unknown",
+            "cpu MHz": "2699.998",
+            "bogomips": "2700.00",
+            "cpu cores": "93"
+          },
+          "visible_logical_cpus": 93,
+          "note": "Container-reported metadata; MHz and BogoMIPS are not a measurement of effective training clock. Missing Modal environment values are unknown."
+        },
+        "gpu": {
+          "model": "NVIDIA H100 80GB HBM3",
+          "driver_version": "580.95.05",
+          "driver_reported_cuda_version": "13.0"
+        },
+        "comparison": {
+          "pairs": 8,
+          "upstream_mean_seconds": 75.771625,
+          "candidate_mean_seconds": 70.553875,
+          "mean_gain_seconds": 5.217749999999995,
+          "reduction_fraction": 0.06886152962933018
+        }
+      }
+    ]
+  },
+  "protocol": {
+    "declared_at": "2026-09-14T22:56:33.351372+00:00",
+    "plan_sha256": "a5db334c260c8041964b1a39b613a1e81986df2a932a3f9bd075b9f91d66c2bd",
+    "confirmation_index": 1,
+    "seed_selection": {
+      "method": "secrets.SystemRandom, uniform without replacement from [10000, 2**31-1), excluding recorded prior study seeds; drawn once before any confirmation runs.",
+      "excluded_prior_seeds": [
+        42,
+        4101,
+        4102,
+        4103,
+        4104,
+        4105,
+        308819929,
+        777678052,
+        1921422898,
+        2097938475
+      ]
+    },
+    "order": "First completed candidate per seed and first completed same-allocation upstream control. Keep every outcome; loss misses are not retried. Each pair runs upstream then candidate.",
+    "runtime_retries": "At most eight attempts per scheduled job for runtime/setup stalls. Replacement candidate allocations receive their own upstream control. Preserve all attempts and extra controls.",
+    "loss_test": "scipy.stats.ttest_1samp(losses, 3.28, alternative=\"less\")",
+    "loss_alpha": 0.005,
+    "speed_test": "scipy.stats.ttest_1samp(upstream_seconds - candidate_seconds, 0, alternative=\"greater\")",
+    "speed_alpha": 0.0125,
+    "minimum_reduction_fraction": 0.03,
+    "gain_interval": "Two-sided 95% Student t interval for mean paired time difference; lower bound must exceed zero.",
+    "repeated_confirmation_policy": {
+      "index_starts_at": 1,
+      "loss_alpha": "0.01 / 2**index",
+      "speed_alpha_one_sided": "0.025 / 2**index",
+      "reason": "Reserve significance budget before the first confirmation in case another frozen implementation later requires a separate fresh-seed confirmation. Never extend a batch based on its running p-value."
+    },
+    "all_completed_outcomes_included": true,
+    "original_sample_size": 16,
+    "reported_sample_size": 8,
+    "reporting_scope": "All eight GCP seed pairs from the original 16-seed confirmation. GCP-only reporting was requested after completion; this subset was not a separate predeclared confirmation."
+  },
+  "statistics": {
+    "count": 8,
+    "mean_loss": 3.276333005,
+    "loss_passes": 8,
+    "upstream_mean_seconds": 75.771625,
+    "candidate_mean_seconds": 70.553875,
+    "mean_gain_seconds": 5.217749999999999,
+    "reduction_fraction": 0.06886152962933022,
+    "loss_p_value": 1.6574776664779247e-05,
+    "speed_p_value": 6.857907834050013e-11,
+    "gain_95_percent_interval_seconds": [
+      5.000616312245536,
+      5.4348836877544615
+    ],
+    "candidate_loss_sample_sd": 0.0011087158542849942,
+    "upstream_mean_loss": 3.27931753,
+    "upstream_loss_sample_sd": 0.0031283525829420285,
+    "upstream_loss_p_value": 0.2783690529641397
+  },
+  "results": [
+    {
+      "seed": 584036170,
+      "allocation": "2a3517d7",
+      "upstream": {
+        "training_seconds": 75.568,
+        "validation_loss": 3.27809978,
+        "started_at": "2026-09-14T22:57:15+00:00",
+        "log_sha256": "a5a841ce482192bdd56133c2c88e1cd2a3fad9eee98bdcffba0e1ed086ad39d5",
+        "log": "logs/gcp/upstream-f411b3d-seed-584036170.log"
+      },
+      "candidate": {
+        "training_seconds": 70.648,
+        "validation_loss": 3.27607536,
+        "started_at": "2026-09-14T23:02:45+00:00",
+        "log_sha256": "d09c0e69ba8dc6b3f2058b08c4f640afdcb322ba69af2ce2bb079b99c16b6c5e",
+        "log": "logs/gcp/slimfp8-seed-584036170.log"
+      },
+      "gain_seconds": 4.920000000000002
+    },
+    {
+      "seed": 726063390,
+      "allocation": "2a3517d7",
+      "upstream": {
+        "training_seconds": 75.606,
+        "validation_loss": 3.27543926,
+        "started_at": "2026-09-14T23:08:45+00:00",
+        "log_sha256": "26ae070c209fbab0ece1227565540a2361744fad162b8029d08a1704112e7d47",
+        "log": "logs/gcp/upstream-f411b3d-seed-726063390.log"
+      },
+      "candidate": {
+        "training_seconds": 70.535,
+        "validation_loss": 3.27543378,
+        "started_at": "2026-09-14T23:14:15+00:00",
+        "log_sha256": "f3ab4dbd0eb1d620a875105abfc3716e53508e90a82e056af61b8f3d73d93dbd",
+        "log": "logs/gcp/slimfp8-seed-726063390.log"
+      },
+      "gain_seconds": 5.070999999999998
+    },
+    {
+      "seed": 202547310,
+      "allocation": "2a3517d7",
+      "upstream": {
+        "training_seconds": 75.964,
+        "validation_loss": 3.27826405,
+        "started_at": "2026-09-14T23:20:25+00:00",
+        "log_sha256": "2798e76ed4c685f39c8108bee0f047c8fa82629c916526053cc0b0dab7d72fcc",
+        "log": "logs/gcp/upstream-f411b3d-seed-202547310.log"
+      },
+      "candidate": {
+        "training_seconds": 70.348,
+        "validation_loss": 3.27700782,
+        "started_at": "2026-09-14T23:25:55+00:00",
+        "log_sha256": "028e2cb673f2b1302e19eb291413725285b926637145e72a2f251ec2a6a10dba",
+        "log": "logs/gcp/slimfp8-seed-202547310.log"
+      },
+      "gain_seconds": 5.616
+    },
+    {
+      "seed": 1339731838,
+      "allocation": "2a3517d7",
+      "upstream": {
+        "training_seconds": 75.909,
+        "validation_loss": 3.27939439,
+        "started_at": "2026-09-14T23:32:05+00:00",
+        "log_sha256": "f14b215ff93f3cbb7d1760b513279d3f344cfc76b80f2011b4cf5d08819619c3",
+        "log": "logs/gcp/upstream-f411b3d-seed-1339731838.log"
+      },
+      "candidate": {
+        "training_seconds": 70.545,
+        "validation_loss": 3.27608037,
+        "started_at": "2026-09-14T23:37:35+00:00",
+        "log_sha256": "ca14963a3c52a7dc67d00fe512c669e42ae0049f6308d879541cb5696455cf02",
+        "log": "logs/gcp/slimfp8-seed-1339731838.log"
+      },
+      "gain_seconds": 5.364000000000004
+    },
+    {
+      "seed": 1730575045,
+      "allocation": "2a3517d7",
+      "upstream": {
+        "training_seconds": 75.774,
+        "validation_loss": 3.27810574,
+        "started_at": "2026-09-14T23:43:45+00:00",
+        "log_sha256": "08d3ad89a3a167f94ce33f283e60ccdb6f901e07b48e8b721345605301509698",
+        "log": "logs/gcp/upstream-f411b3d-seed-1730575045.log"
+      },
+      "candidate": {
+        "training_seconds": 70.493,
+        "validation_loss": 3.27514529,
+        "started_at": "2026-09-14T23:49:15+00:00",
+        "log_sha256": "ff7f43395931b4aa33f02ebf1efdb6f41b464c69b9abf277b4f7d4950a823586",
+        "log": "logs/gcp/slimfp8-seed-1730575045.log"
+      },
+      "gain_seconds": 5.281000000000006
+    },
+    {
+      "seed": 703678413,
+      "allocation": "2a3517d7",
+      "upstream": {
+        "training_seconds": 75.538,
+        "validation_loss": 3.28023505,
+        "started_at": "2026-09-14T23:55:15+00:00",
+        "log_sha256": "5dda76b85bc3777c344134495098388da631d57da41d57efe2cc0c430b95a803",
+        "log": "logs/gcp/upstream-f411b3d-seed-703678413.log"
+      },
+      "candidate": {
+        "training_seconds": 70.68,
+        "validation_loss": 3.27543712,
+        "started_at": "2026-09-15T00:00:46+00:00",
+        "log_sha256": "fb44e7f5955a94a955f2d9db8e3923a08c1b2f8f9d7d799c87b9233b7724577c",
+        "log": "logs/gcp/slimfp8-seed-703678413.log"
+      },
+      "gain_seconds": 4.85799999999999
+    },
+    {
+      "seed": 1278925671,
+      "allocation": "2a3517d7",
+      "upstream": {
+        "training_seconds": 75.841,
+        "validation_loss": 3.2862618,
+        "started_at": "2026-09-15T00:06:56+00:00",
+        "log_sha256": "fb07841aaf1e73599a0c294a072f0f14325b2011a448f9b55846be089b428370",
+        "log": "logs/gcp/upstream-f411b3d-seed-1278925671.log"
+      },
+      "candidate": {
+        "training_seconds": 70.646,
+        "validation_loss": 3.27845836,
+        "started_at": "2026-09-15T00:12:26+00:00",
+        "log_sha256": "eba240f7b277bae93247929d25b303962cf45266d795b2817cfbb12f5040df26",
+        "log": "logs/gcp/slimfp8-seed-1278925671.log"
+      },
+      "gain_seconds": 5.194999999999993
+    },
+    {
+      "seed": 151749878,
+      "allocation": "2a3517d7",
+      "upstream": {
+        "training_seconds": 75.973,
+        "validation_loss": 3.27874017,
+        "started_at": "2026-09-15T00:18:36+00:00",
+        "log_sha256": "47a76e46f0178c7dc8fb6aba88daf8d1bfcd859942a329a2cc1197a3f0e8e3a2",
+        "log": "logs/gcp/upstream-f411b3d-seed-151749878.log"
+      },
+      "candidate": {
+        "training_seconds": 70.536,
+        "validation_loss": 3.27702594,
+        "started_at": "2026-09-15T00:24:06+00:00",
+        "log_sha256": "eccd393a6fcbc821b45e4a4b613c1258933ed70002786a78707648847859e058",
+        "log": "logs/gcp/slimfp8-seed-151749878.log"
+      },
+      "gain_seconds": 5.436999999999998
+    }
+  ],
+  "controls": [
+    {
+      "seed": 151749878,
+      "allocation": "2a3517d7",
+      "target": "upstream",
+      "purpose": "final upstream repeat",
+      "training_seconds": 76.051,
+      "validation_loss": 3.27776003,
+      "started_at": "2026-09-15T00:30:16+00:00",
+      "log_sha256": "33afb96ec0b9752f4f083f5d8511b3167910ef71b9d0876b40a09cf3b7e4d67b",
+      "log": "logs/gcp/controls/upstream-f411b3d-seed-151749878.log"
+    }
+  ],
+  "audit": {
+    "verified_at": "2026-09-15T01:03:52+00:00",
+    "all_pairs_verified": true,
+    "all_owned_apps_stopped": true,
+    "runtime_failed_attempts": 0,
+    "end_controls": [
+      {
+        "worker": "e47e454b",
+        "seed": 151749878,
+        "matched_hardware": true,
+        "before_seconds": 75.973,
+        "after_seconds": 76.051,
+        "difference_seconds": 0.07800000000000296
+      }
+    ]
+  }
+}

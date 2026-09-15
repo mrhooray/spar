@@ -1,0 +1,199 @@
+{
+  "purpose": "Archived AWS runs; excluded from the GCP comparison.",
+  "source_and_evaluator_manifest": "../../comparison.json",
+  "allocation": {
+    "id": "c2e688ba",
+    "sandbox_id": "sb-FCROu7Q9WXDf03DkEcKpFR",
+    "gpu_uuids": [
+      "GPU-20ba0bf8-8cf7-ae8d-8c45-d16e537bcb97",
+      "GPU-325967ea-26f7-3984-0610-8cfcf4ea91bd",
+      "GPU-7768cb44-7a0c-6d58-f278-c90bd42ccee1",
+      "GPU-98a6a0b0-8b13-edc6-c563-51fd1687df04",
+      "GPU-9d401240-8ca8-eabb-7405-300dd865f59a",
+      "GPU-b304a408-1c70-023a-a1ab-65d8cb430895",
+      "GPU-c91301ff-0fa1-cf7c-3137-5dca6b705ef3",
+      "GPU-e1a58955-9fe1-e5aa-c2df-82cf18fd8547"
+    ],
+    "host": {
+      "MODAL_REGION": "ap-northeast-1",
+      "MODAL_CLOUD_PROVIDER": "CLOUD_PROVIDER_AWS",
+      "MODAL_CLOUD": null,
+      "MODAL_TASK_ID": "ta-01M2H26JA27J627WCN58KGJHVS",
+      "cpu": {
+        "vendor_id": "AuthenticAMD",
+        "cpu family": "175",
+        "model": "1",
+        "model name": "unknown",
+        "cpu MHz": "3215.280",
+        "bogomips": "3215.28",
+        "cpu cores": "86"
+      },
+      "visible_logical_cpus": 86,
+      "note": "Container-reported metadata; MHz and BogoMIPS are not a measurement of effective training clock. Missing Modal environment values are unknown."
+    },
+    "gpu": {
+      "model": "NVIDIA H100 80GB HBM3",
+      "driver_version": "580.95.05",
+      "driver_reported_cuda_version": "13.0"
+    }
+  },
+  "results": [
+    {
+      "seed": 869174854,
+      "allocation": "c2e688ba",
+      "upstream": {
+        "training_seconds": 84.745,
+        "validation_loss": 3.27855349,
+        "started_at": "2026-09-14T22:57:57+00:00",
+        "log_sha256": "af7cd9bce90cf8bdb398f784363201b099812bcf98fb4f6dd23cdc7b541c6393",
+        "log": "upstream-f411b3d-seed-869174854.log"
+      },
+      "candidate": {
+        "training_seconds": 71.142,
+        "validation_loss": 3.27642536,
+        "started_at": "2026-09-14T23:04:57+00:00",
+        "log_sha256": "c10d46eccb2530e856baaae148eb2deab055714c73794529ccd7ca3bb8b40fa5",
+        "log": "slimfp8-seed-869174854.log"
+      }
+    },
+    {
+      "seed": 515221347,
+      "allocation": "c2e688ba",
+      "upstream": {
+        "training_seconds": 84.743,
+        "validation_loss": 3.27528143,
+        "started_at": "2026-09-14T23:12:27+00:00",
+        "log_sha256": "0070ff10b17a61284d0917963cf9dd000078a7ff9088566edf9d0300a47d5c6b",
+        "log": "upstream-f411b3d-seed-515221347.log"
+      },
+      "candidate": {
+        "training_seconds": 71.305,
+        "validation_loss": 3.27589941,
+        "started_at": "2026-09-14T23:19:27+00:00",
+        "log_sha256": "7edbff6ad9f3f0b3f830cef9e4a4fc8f63e35fc37ef9134304903c0dcfc652ab",
+        "log": "slimfp8-seed-515221347.log"
+      }
+    },
+    {
+      "seed": 553015914,
+      "allocation": "c2e688ba",
+      "upstream": {
+        "training_seconds": 84.558,
+        "validation_loss": 3.2767663,
+        "started_at": "2026-09-14T23:26:57+00:00",
+        "log_sha256": "b8a457f61e5da507a50b76c2a3d4286d5d7d72349f772926da210608cf4cdb6c",
+        "log": "upstream-f411b3d-seed-553015914.log"
+      },
+      "candidate": {
+        "training_seconds": 71.332,
+        "validation_loss": 3.27834988,
+        "started_at": "2026-09-14T23:33:57+00:00",
+        "log_sha256": "3f8f87f4c0c22afab94b16e831502798d768f074c10bd4a656186711dedd7385",
+        "log": "slimfp8-seed-553015914.log"
+      }
+    },
+    {
+      "seed": 1724937041,
+      "allocation": "c2e688ba",
+      "upstream": {
+        "training_seconds": 84.866,
+        "validation_loss": 3.27699447,
+        "started_at": "2026-09-14T23:41:28+00:00",
+        "log_sha256": "cb3550f295e7594a07043bd51c33fc477cc7ecd9f87b7ebead20f852195a831c",
+        "log": "upstream-f411b3d-seed-1724937041.log"
+      },
+      "candidate": {
+        "training_seconds": 71.271,
+        "validation_loss": 3.27689099,
+        "started_at": "2026-09-14T23:48:28+00:00",
+        "log_sha256": "a78c52c4a76d1add5f5dad53e239e8105176862eb62c2bde40e937245c207e45",
+        "log": "slimfp8-seed-1724937041.log"
+      }
+    },
+    {
+      "seed": 1580167937,
+      "allocation": "c2e688ba",
+      "upstream": {
+        "training_seconds": 84.296,
+        "validation_loss": 3.27619267,
+        "started_at": "2026-09-14T23:55:58+00:00",
+        "log_sha256": "77e2d100d77c687a71167939eff903a3efb69d4629832b2d8147c97c306c9496",
+        "log": "upstream-f411b3d-seed-1580167937.log"
+      },
+      "candidate": {
+        "training_seconds": 71.312,
+        "validation_loss": 3.27758145,
+        "started_at": "2026-09-15T00:02:58+00:00",
+        "log_sha256": "185e5d760e83d322a012f2b5c7d83b318e83f352a46d8dcd9722fecb851a8bc5",
+        "log": "slimfp8-seed-1580167937.log"
+      }
+    },
+    {
+      "seed": 1823503937,
+      "allocation": "c2e688ba",
+      "upstream": {
+        "training_seconds": 83.71,
+        "validation_loss": 3.27699304,
+        "started_at": "2026-09-15T00:10:28+00:00",
+        "log_sha256": "7b34f2bb2c9d09dce8bdbcdd556a4891f0e23dfc66f8e4261aeff2f088b28895",
+        "log": "upstream-f411b3d-seed-1823503937.log"
+      },
+      "candidate": {
+        "training_seconds": 71.221,
+        "validation_loss": 3.27743077,
+        "started_at": "2026-09-15T00:17:28+00:00",
+        "log_sha256": "3c09b708b58c7fd052ca3fc6e3ab820fb892408c3ef7a97ecb703345cfc790c6",
+        "log": "slimfp8-seed-1823503937.log"
+      }
+    },
+    {
+      "seed": 1069591241,
+      "allocation": "c2e688ba",
+      "upstream": {
+        "training_seconds": 84.421,
+        "validation_loss": 3.27842617,
+        "started_at": "2026-09-15T00:24:58+00:00",
+        "log_sha256": "870a24902072c92662853824e99b3a7f98315faa1d458656f659644288df9018",
+        "log": "upstream-f411b3d-seed-1069591241.log"
+      },
+      "candidate": {
+        "training_seconds": 71.082,
+        "validation_loss": 3.27454662,
+        "started_at": "2026-09-15T00:31:58+00:00",
+        "log_sha256": "966023c46f670accbe421836111e83cb3754d331b2ac51fd06230b4b5b596ed1",
+        "log": "slimfp8-seed-1069591241.log"
+      }
+    },
+    {
+      "seed": 1344774468,
+      "allocation": "c2e688ba",
+      "upstream": {
+        "training_seconds": 84.615,
+        "validation_loss": 3.2782805,
+        "started_at": "2026-09-15T00:39:29+00:00",
+        "log_sha256": "cb86198d2ea6c7f5ed279882b200c1446e84692f720d2b18f02ffb8a6ba67c5f",
+        "log": "upstream-f411b3d-seed-1344774468.log"
+      },
+      "candidate": {
+        "training_seconds": 71.483,
+        "validation_loss": 3.27626848,
+        "started_at": "2026-09-15T00:46:29+00:00",
+        "log_sha256": "e999e5591e12264637c68053c634c84c6111b05ecce55f7532ecaf62518047fb",
+        "log": "slimfp8-seed-1344774468.log"
+      }
+    }
+  ],
+  "controls": [
+    {
+      "seed": 1344774468,
+      "allocation": "c2e688ba",
+      "target": "upstream",
+      "purpose": "final upstream repeat",
+      "training_seconds": 84.487,
+      "validation_loss": 3.27639151,
+      "started_at": "2026-09-15T00:53:59+00:00",
+      "log_sha256": "9ae05d3317e96ae3cf67e5bc2ad5cdb227442458de875b7e71ad8ad553a46eb8",
+      "log": "controls/upstream-f411b3d-seed-1344774468.log"
+    }
+  ]
+}
