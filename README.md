@@ -18,13 +18,17 @@ Comparison of a simple sequential agent (no subagents) with SPAR at different pa
 
 Early results suggest that SPAR reaches better results with fewer candidate iterations and lower variance.
 
-With a fresh agent session for every turn, both SPAR configurations took longer to complete all 32 candidates than the simple sequential agent, with p=1 taking the longest. This motivated SPAR's subsequent transition to persistent agent sessions; see [Learnings](LEARNINGS.md).
+With a fresh agent session for every turn, both SPAR configurations took longer to complete all 32 candidates than the simple sequential agent, with p=1 taking the longest. This motivated SPAR's subsequent transition to persistent agent sessions; see [LEARNINGS.md](LEARNINGS.md).
 
 Caveat: proof-of-concept results from limited resources, not a rigorous benchmark.
 
 ## MCTS Visualizations
 
 Explore SPAR's search progression through these [interactive visualizations](https://vliw-simd.mrhooray.com/spar/).
+
+## NanoGPT speedrun
+
+SPAR research improved on the July 17, 2026 upstream best by **5.2 seconds (6.9%)**: 75.772s → 70.554s across eight seeds on the same GCP 8×H100 allocation. See [nanogpt/](nanogpt/) for the solution, validation results, and raw logs.
 
 ## Installation
 
