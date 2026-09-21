@@ -53,19 +53,20 @@ def analyze(runs):
     losses = [row["val_loss"] for row in runs]
     seconds = [row["training_seconds"] for row in runs]
     median_seconds = statistics.median(seconds)
+    mean_loss = statistics.mean(losses)
     p_value = float(ttest_1samp(losses, popmean=3.28, alternative="less").pvalue)
-    reached = all(row["reached_target"] for row in runs)
-    under_time = reached and all(row["beat_77_5"] for row in runs)
+    reached = mean_loss <= 3.28 and p_value < 0.01
+    under_time = reached and all(duration < 77.5 for duration in seconds)
     return {
-        "score": 77.5 / median_seconds if reached else -max(losses),
+        "score": 77.5 / median_seconds if reached else -mean_loss,
         "median_training_seconds": median_seconds,
         "max_training_seconds": max(seconds),
-        "mean_val_loss": statistics.mean(losses),
+        "mean_val_loss": mean_loss,
         "max_val_loss": max(losses),
         "loss_p_value_one_sided": p_value,
         "reached_target": reached,
         "beat_77_5": under_time,
-        "passed": under_time and p_value < 0.01,
+        "passed": under_time,
     }
 
 

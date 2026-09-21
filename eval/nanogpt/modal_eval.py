@@ -28,7 +28,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("mode", choices=("evaluate", "profile", "check"))
     parser.add_argument("--candidate", type=Path, default=Path.cwd())
-    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--seed", type=int, help="Seed through seeded_train.py; omit for the original direct launcher")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--sandbox-id")
     args = parser.parse_args()
@@ -113,12 +113,16 @@ def train(sandbox, metadata, sources, seed, directory):
     started = time.monotonic()
     print(f"Sandbox {sandbox.object_id}; seed {seed}; artifacts {directory}", file=sys.stderr, flush=True)
     for name, source in sources.items():
-        if name == "train_gpt.py":
+        if name == "train_gpt.py" and seed is not None:
             source = source.replace("val_loss:{val_loss:.4f}", "val_loss:{val_loss:.8f}")
         sandbox.filesystem.write_text(source, f"/workspace/{name}")
-    sandbox.filesystem.write_text((HARNESS / "seeded_train.py").read_text(), "/workspace/seeded_train.py")
+    if seed is not None:
+        sandbox.filesystem.write_text((HARNESS / "seeded_train.py").read_text(), "/workspace/seeded_train.py")
     for filename, command in (
         ("environment.txt", ("nvidia-smi",)),
+        ("gpu-details.txt", ("nvidia-smi", "-q")),
+        ("placement.json", ("python", "-c", "import json, os; print(json.dumps({key: os.environ.get(key) "
+                            "for key in ('MODAL_CLOUD_PROVIDER', 'MODAL_REGION')}))")),
         ("topology.txt", ("nvidia-smi", "topo", "-m")),
         ("cpu.txt", ("lscpu",)),
         ("cpuinfo.txt", ("cat", "/proc/cpuinfo")),
@@ -126,24 +130,48 @@ def train(sandbox, metadata, sources, seed, directory):
         ("packages.txt", ("python", "-m", "pip", "freeze")),
     ):
         inventory = sandbox.exec(*command, timeout=60)
-        (directory / filename).write_text(inventory.stdout.read() + inventory.stderr.read())
+        output = inventory.stdout.read() + inventory.stderr.read()
+        (directory / filename).write_text(output)
         inventory.wait()
+        if inventory.returncode:
+            raise RuntimeError(f"Environment inventory {filename} failed: {output}")
     hardware = sandbox.exec("nvidia-smi", "--query-gpu=uuid,name", "--format=csv,noheader")
     names = hardware.stdout.read().strip().splitlines()
     hardware.wait()
     if hardware.returncode or len(names) != 8 or any("H100" not in name for name in names):
         raise RuntimeError(f"Expected exactly eight H100 GPUs, got {names}")
     sandbox.filesystem.write_text("", "/workspace/train.stdout")
-    process = sandbox.exec("bash", "-c", "torchrun --standalone --nproc_per_node=8 seeded_train.py > /workspace/train.stdout 2>&1",
-                           env={"DATA_PATH": "/cache", "NANOGPT_SEED": str(seed), **TRAINING_ENV}, timeout=1600)
+    launcher = "train_gpt.py" if seed is None else "seeded_train.py"
+    environment = {"DATA_PATH": "/cache", **TRAINING_ENV}
+    if seed is not None:
+        environment["NANOGPT_SEED"] = str(seed)
+    process = sandbox.exec("bash", "-c", f"torchrun --standalone --nproc_per_node=8 {launcher} > /workspace/train.stdout 2>&1",
+                           env=environment, timeout=1600)
     returncode = collect_training(sandbox, process, directory / "train.stdout")
     log = (directory / "train.stdout").read_text()
+    training_log = re.search(r"^logs/[\w-]+\.txt$", log, re.MULTILINE)
+    if training_log:
+        destination = directory / training_log[0]
+        destination.parent.mkdir(exist_ok=True)
+        for attempt in range(3):
+            try:
+                destination.write_text(sandbox.filesystem.read_text(f"/workspace/{training_log[0]}"))
+                break
+            except (OSError, GRPCError, StreamTerminatedError) as error:
+                if attempt == 2:
+                    raise
+                print(f"Retrying training log download: {error}", file=sys.stderr, flush=True)
+                time.sleep(3)
     result = summarize(log, returncode)
+    if training_log is None:
+        raise ValueError("Training log path missing from console output")
+    result["training_log"] = training_log[0]
     result["timing"] = timing_profile(log)
-    actual_env = next(line.split("=", 1)[1] for line in log.splitlines()
-                      if line.startswith("HARNESS_TRAINING_ENV="))
+    actual_env = next((json.loads(line.split("=", 1)[1]) for line in log.splitlines()
+                       if line.startswith("HARNESS_TRAINING_ENV=")), None)
     result.update(seed=seed, sandbox_id=sandbox.object_id, image_id=metadata["image_id"], devices=names,
-                  training_environment=json.loads(actual_env))
+                  launcher=launcher, training_environment=actual_env,
+                  placement=json.loads((directory / "placement.json").read_text()))
     result["job_wall_seconds"] = time.monotonic() - started
     return result
 

@@ -21,15 +21,35 @@ CANDIDATE = Path(os.environ.get("NANOGPT_TEST_CANDIDATE", modal_eval.HARNESS.par
 
 
 class StickyEvaluationTest(unittest.TestCase):
+    def test_unseeded_evaluation_uses_direct_launcher_and_unchanged_source(self):
+        sandbox = FakeSandbox()
+        snapshot = self.snapshot(0)
+        snapshot["sources"]["train_gpt.py"] = '# source with val_loss:{val_loss:.4f}\n'
+        with tempfile.TemporaryDirectory() as temporary, self.connections(sandbox):
+            result = modal_eval.evaluate(snapshot, None, Path(temporary), sandbox.object_id)
+            self.assertEqual(result["launcher"], "train_gpt.py")
+            self.assertIsNone(result["seed"])
+            self.assertIsNone(result["training_environment"])
+            self.assertEqual(sandbox.uploads["/workspace/train_gpt.py"], snapshot["sources"]["train_gpt.py"])
+            self.assertNotIn("/workspace/seeded_train.py", sandbox.uploads)
+            self.assertNotIn("NANOGPT_SEED", sandbox.training_environments[0])
+            self.assertEqual(result["placement"]["MODAL_CLOUD_PROVIDER"], "CLOUD_PROVIDER_GCP")
+
     def test_two_evaluations_reuse_allocation_with_fresh_processes_and_sources(self):
         sandbox = FakeSandbox()
         with tempfile.TemporaryDirectory() as temporary, self.connections(sandbox):
             for index in range(2):
-                result = modal_eval.evaluate(self.snapshot(index), 42, Path(temporary) / str(index), sandbox.object_id)
+                directory = Path(temporary) / str(index)
+                result = modal_eval.evaluate(self.snapshot(index), 42, directory, sandbox.object_id)
                 self.assertEqual(result["sandbox_id"], sandbox.object_id)
                 self.assertEqual(result["training_seconds"], 73.2)
                 self.assertTrue(result["reached_target"])
                 self.assertEqual(sandbox.uploads["/workspace/train_gpt.py"], f"# source {index}\n")
+                self.assertEqual(result["training_log"], f"logs/run-{index + 1}.txt")
+                self.assertEqual((directory / result["training_log"]).read_bytes(),
+                                 sandbox.uploads[f"/workspace/{result['training_log']}"].encode())
+                self.assertTrue((directory / result["training_log"]).read_text().startswith(f"# source {index}\n"))
+            self.assertTrue((Path(temporary) / "0/logs/run-1.txt").exists())
             self.assertEqual(sandbox.training_calls, 2)
             self.assertTrue(all(env["HF_HUB_OFFLINE"] == "1" for env in sandbox.training_environments))
             self.assertEqual(sandbox.clean_calls, 2)
@@ -44,8 +64,31 @@ class StickyEvaluationTest(unittest.TestCase):
                 modal_eval.evaluate(self.snapshot(0), 42, directory, sandbox.object_id)
             self.assertFalse((directory / "result.json").exists())
             self.assertTrue((directory / "train.stdout").exists())
+            self.assertEqual((directory / "logs/run-1.txt").read_text(), "# source 0\nRunning Python test\n")
             self.assertEqual(sandbox.claims, 0)
             sandbox.detach.assert_called_once()
+
+    def test_native_log_download_retries_without_restarting_training(self):
+        sandbox = FakeSandbox()
+        read = sandbox.filesystem.read_text
+        attempts = 0
+
+        def read_with_interruption(path):
+            nonlocal attempts
+            if path.startswith("/workspace/logs/"):
+                attempts += 1
+                if attempts == 1:
+                    raise StreamTerminatedError("connection lost")
+            return read(path)
+
+        sandbox.filesystem.read_text = read_with_interruption
+        with tempfile.TemporaryDirectory() as temporary, self.connections(sandbox), patch("modal_eval.time.sleep"):
+            directory = Path(temporary)
+            result = modal_eval.evaluate(self.snapshot(0), 42, directory, sandbox.object_id)
+            self.assertEqual(attempts, 2)
+            self.assertEqual(sandbox.training_calls, 1)
+            self.assertEqual(result["training_seconds"], 73.2)
+            self.assertTrue((directory / result["training_log"]).exists())
 
     def test_busy_sandbox_is_not_overwritten(self):
         sandbox = FakeSandbox(busy=True)
@@ -55,6 +98,26 @@ class StickyEvaluationTest(unittest.TestCase):
             self.assertEqual(sandbox.training_calls, 0)
             self.assertEqual(sandbox.clean_calls, 0)
             self.assertEqual(sandbox.uploads, {})
+
+    def test_inventory_failure_stops_before_training(self):
+        sandbox = FakeSandbox()
+        execute = sandbox.exec
+
+        def exec_with_failed_inventory(*args, **kwargs):
+            if args[:2] == ("python", "-c") and "MODAL_CLOUD_PROVIDER" in args[2]:
+                return SimpleNamespace(stdout=io.StringIO(), stderr=io.StringIO("placement unavailable"),
+                                       returncode=1, wait=lambda: 1)
+            return execute(*args, **kwargs)
+
+        with tempfile.TemporaryDirectory() as temporary, self.connections(sandbox), \
+                patch.object(sandbox, "exec", side_effect=exec_with_failed_inventory):
+            directory = Path(temporary)
+            with self.assertRaisesRegex(RuntimeError, "placement.json.*placement unavailable"):
+                modal_eval.evaluate(self.snapshot(0), None, directory, sandbox.object_id)
+            self.assertEqual(sandbox.training_calls, 0)
+            self.assertEqual((directory / "placement.json").read_text(), "placement unavailable")
+            self.assertFalse((directory / "result.json").exists())
+            self.assertEqual(sandbox.claims, 0)
 
     def test_cleanup_failure_preserves_training_error(self):
         sandbox = FakeSandbox(failed=True)
@@ -113,7 +176,7 @@ class FakeSandbox:
         self.metadata = {"id": self.object_id, "gpu": modal_eval.GPU, "image_id": "im-test",
                          "name": "abcdef12", "app_id": "ap-test", "environment": "sandbox"}
         self.filesystem = SimpleNamespace(
-            read_text=lambda path: json.dumps(self.metadata),
+            read_text=lambda path: json.dumps(self.metadata) if path == "/tmp/nanogpt-sandbox.json" else self.uploads[path],
             write_text=lambda text, path: self.uploads.update({path: text}),
         )
 
@@ -130,13 +193,22 @@ class FakeSandbox:
                 text = "\n".join(f"GPU-{index}, NVIDIA H100" for index in range(8))
         elif args[0] == "bash" and "find ." in args[2]:
             self.clean_calls += 1
+            self.uploads.clear()
         elif args[0] == "bash" and "torchrun" in args[2]:
             self.training_calls += 1
             self.training_environments.append(kwargs["env"])
             code = 1 if self.failed else 0
-            text = 'HARNESS_TRAINING_ENV={"torch_num_threads":1}\n'
+            text = 'HARNESS_TRAINING_ENV={"torch_num_threads":1}\n' if "seeded_train.py" in args[2] else ""
+            filename = f"logs/run-{self.training_calls}.txt"
+            text += filename + "\n"
+            native_log = self.uploads["/workspace/train_gpt.py"] + "Running Python test\n"
             if not self.failed:
-                text += "step:1285/1285 val_loss:3.277 train_time:73200ms\n"
+                metrics = "step:1285/1285 val_loss:3.277 train_time:73200ms\n"
+                text += metrics
+                native_log += metrics
+            self.uploads[f"/workspace/{filename}"] = native_log
+        elif args[:2] == ("python", "-c") and "MODAL_CLOUD_PROVIDER" in args[2]:
+            text = json.dumps({"MODAL_CLOUD_PROVIDER": "CLOUD_PROVIDER_GCP", "MODAL_REGION": "us-east4"})
         return SimpleNamespace(stdout=io.StringIO(text), stderr=io.StringIO(),
                                returncode=code, wait=lambda: code)
 

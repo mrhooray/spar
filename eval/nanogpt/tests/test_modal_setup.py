@@ -50,7 +50,7 @@ class SandboxLifecycleTest(unittest.TestCase):
                 patch.object(modal_setup.modal.App, "lookup", return_value=app), \
                 patch.object(modal_setup, "training_image"), \
                 patch.object(modal_setup.modal.Volume, "from_name"), \
-                patch.object(modal_setup.modal.Sandbox, "create", side_effect=RuntimeError("allocation failed")), \
+                patch.object(modal_setup.modal.Sandbox, "create", side_effect=RuntimeError("allocation failed")) as create, \
                 patch.object(modal_setup, "stop") as stop, \
                 self.assertRaisesRegex(RuntimeError, "allocation failed"):
             directory = Path(temporary)
@@ -58,6 +58,7 @@ class SandboxLifecycleTest(unittest.TestCase):
                 modal_setup.create(directory)
             finally:
                 stop.assert_called_once_with(directory)
+                self.assertEqual(create.call_args.kwargs["cloud"], "gcp")
                 self.assertEqual(json.loads((directory / "app.json").read_text())["app_id"], "ap-test")
 
     def test_failed_offline_preflight_stops_setup_before_accepting_evaluations(self):

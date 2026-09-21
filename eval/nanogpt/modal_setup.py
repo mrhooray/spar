@@ -27,16 +27,17 @@ def main():
     parser.add_argument("mode", choices=("create", "stop"))
     parser.add_argument("--output", type=Path, required=True, help="Directory holding the setup manifest")
     parser.add_argument("--cache-slot", type=cache_slot, default="shared")
+    parser.add_argument("--cloud", choices=("gcp", "aws", "oci"), default="gcp")
     args = parser.parse_args()
     directory = args.output.resolve()
     if args.mode == "create":
-        result = create(directory, args.cache_slot)
+        result = create(directory, args.cache_slot, args.cloud)
     else:
         result = stop(directory)
     print(json.dumps(result))
 
 
-def create(directory, cache_slot="shared"):
+def create(directory, cache_slot="shared", cloud="gcp"):
     directory.mkdir(parents=True, exist_ok=True)
     with (directory / "app.json").open("x") as output:
         name = uuid.uuid4().hex
@@ -49,10 +50,11 @@ def create(directory, cache_slot="shared"):
         volume = modal.Volume.from_name(VOLUME, create_if_missing=True)
         with contextlib.redirect_stdout(sys.stderr), modal.enable_output():
             sandbox = modal.Sandbox.create("sleep", "86400", app=app, image=image, gpu=GPU,
+                                           cloud=cloud,
                                            cpu=32, memory=131072, volumes={"/persistent": volume},
                                            workdir="/workspace", timeout=86400, idle_timeout=1800)
         archive = f"/persistent/compiler-cache{'-' + cache_slot if cache_slot != 'shared' else ''}.tar"
-        metadata = {"id": sandbox.object_id, "gpu": GPU, "image_id": image.object_id,
+        metadata = {"id": sandbox.object_id, "gpu": GPU, "image_id": image.object_id, "cloud": cloud,
                     "name": name, "app_id": app.app_id, "environment": environment,
                     "cache_slot": cache_slot, "archive": archive, "volume": VOLUME,
                     "created_at": datetime.now(timezone.utc).isoformat()}
@@ -145,8 +147,13 @@ def training_image():
         .pip_install("torch==2.10.0", index_url="https://download.pytorch.org/whl/cu128")
         .pip_install("numpy==2.2.6", "tqdm==4.67.1", "huggingface-hub==1.31.0",
                      "kernels==0.16.1", "setuptools==80.9.0", "typing-extensions==4.15.0",
-                     "tiktoken==0.12.0")
-        .run_commands("mkdir -p /workspace /cache")
+                     "tiktoken==0.12.0", "uv==0.12.11")
+        .run_commands(
+            "uv python install 3.12.13 --install-dir /opt/python",
+            "cp -a /opt/python/cpython-3.12.13-linux-x86_64-gnu/. /usr/local/",
+            'python -c "import sys, torch, triton; assert sys.version_info[:3] == (3, 12, 13); '
+            'assert torch.__version__ == \'2.10.0+cu128\'; assert triton.__version__ == \'3.6.0\'"',
+            "mkdir -p /workspace /cache")
         .env({"HF_HOME": "/cache/huggingface", "TORCHINDUCTOR_CACHE_DIR": "/cache/inductor",
               "TRITON_CACHE_DIR": "/cache/triton", "OMP_NUM_THREADS": "1", "PYTHONUNBUFFERED": "1"})
     )

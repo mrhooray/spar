@@ -1,6 +1,6 @@
 # NanoGPT evaluation on Modal
 
-Provision an eight-H100 sandbox once, then submit implementations or seeds to
+Provision an eight-H100 GCP sandbox once, then submit implementations or seeds to
 that same allocation. Each evaluation starts a fresh training process and saves
 its own results. GPU allocation, image, data, and compiler caches remain in place
 until explicit cleanup or a timeout.
@@ -35,10 +35,10 @@ uv run modal token new
 # If using this non-default Modal environment:
 export MODAL_ENVIRONMENT=sandbox
 
-uv run python modal_setup.py create --output /path/to/new-setup
+uv run python modal_setup.py create --cloud gcp --output /path/to/new-setup
 # Use the id printed above or saved in new-setup/sandbox.json:
 uv run python modal_eval.py evaluate --sandbox-id sb-... \
-  --candidate /path/to/nanogpt --seed 42 --output /path/to/new-result
+  --candidate /path/to/nanogpt --output /path/to/new-result
 
 uv run python modal_multi_seed.py --sandbox-id sb-... \
   --candidate /path/to/nanogpt --seeds 1616,1717,1818,1919,2020 \
@@ -67,14 +67,29 @@ and concurrent use or leftover GPU processes are rejected. On runtime failure,
 the coordinator must stop that allocation before continuing on another one.
 Loss above the threshold remains a completed, scored result.
 
+Omitting `--seed` runs the original `torchrun --standalone --nproc_per_node=8
+train_gpt.py` command with unchanged source and no seed wrapper. Pass `--seed 42`
+for explicit Python/NumPy/Torch seeding through `seeded_train.py`; that mode also
+prints validation loss to eight decimal places. Multi-seed evaluation uses this
+explicitly seeded mode. The result records the launcher and seed (`null` for a
+direct, unseeded run).
+
 ## Results and cache reuse
 
 Single-run `result.json` contains `score`, `training_seconds`, `val_loss`,
 `reached_target`, `beat_77_5`, `timing`, source/evaluator hashes, seed, sandbox ID,
-GPU UUIDs, image ID, and the training thread environment. Raw logs and CPU,
+GPU UUIDs, image ID, cloud/region placement, and the training thread environment
+(available for the seeded launcher). Raw logs, GPU details, and CPU,
 Python, and package inventories are retained. CPU metadata reflects what the
 container reports; it is not a controlled clock measurement. Existing result directories cannot be
 overwritten.
+
+Each run saves console output in `train.stdout` and the script-generated log in
+`logs/<run_id>.txt`, referenced by `result.json`'s `training_log` field. The latter
+includes source code, software/GPU information, and training metrics. It is
+downloaded after the training process exits and before the sandbox is reused;
+partial logs are also saved when failed training printed a log path. Interrupted
+downloads are retried up to three attempts. Metrics still come from `train.stdout`.
 
 The score is `77.5 / training_seconds` when loss is at most 3.28, otherwise
 negative loss. Training time uses the original synchronized benchmark clock;
@@ -83,8 +98,14 @@ contains asynchronous step estimates, not a CUDA kernel trace. Sandbox reuse
 reduces allocation differences; it does not eliminate runtime variation.
 
 Multi-seed output preserves `run-<seed>/` results and reports median/max time,
-mean/max loss, and a one-sided mean-loss t-test. It exits nonzero unless every
-run has loss <=3.28 and time <77.5 seconds, with p<0.01. Use distinct, unused
+mean/max loss, and a one-sided mean-loss t-test. Aggregate `reached_target`
+requires mean loss <=3.28 with p<0.01, following the
+[upstream mean-loss rule](https://github.com/KellerJordan/modded-nanogpt#rules);
+individual loss misses remain included. The aggregate score is
+`77.5 / median_training_seconds` when this quality criterion passes, otherwise
+negative mean loss. It exits nonzero unless quality passes and every run is
+under the local 77.5-second target. That time target is separate from upstream's
+requirement to beat the prior record on the same hardware. Use distinct, unused
 seeds for independent confirmation; repeating a tuning seed measures runtime
 repeatability instead.
 
@@ -104,6 +125,16 @@ Optional environment variables are `MODAL_ENVIRONMENT`,
 without one, setup builds the pinned Torch/CUDA dependency image. The seeded
 worker and protected benchmark definitions must remain consistent across
 comparisons.
+
+Setup defaults to GCP; `--cloud` can select GCP, AWS, or OCI. The image pins
+Python 3.12.13, PyTorch 2.10.0+cu128, and Triton 3.6.0 to match the recorded
+[PR #344 environment](https://github.com/KellerJordan/modded-nanogpt/pull/344).
+Other dependency pins are our reproducible choices where that PR provides no
+exact version. The CUDA 12.8.1 image does not select the host NVIDIA driver:
+[Modal manages that driver](https://modal.com/docs/guide/cuda). CPU hardware,
+interconnect, clocks, and driver version therefore are not guaranteed to match
+the PR's Prime Intellect/DataCrunch node. Placement and hardware are recorded
+for each run; an explicit image ID may refer to an older Python environment.
 
 ## SPAR and tests
 
